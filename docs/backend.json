@@ -43,7 +43,7 @@
           "description": "The date (YYYY-MM-DD) of the last song generation."
         }
       },
-      "required": ["id", "email", "role"]
+      "required": ["id", "role"]
     },
     "Song": {
       "title": "Song",
@@ -190,6 +190,10 @@
           "type": "string",
           "format": "date-time",
           "description": "The timestamp when the user joined the session."
+        },
+        "isAnonymous": {
+          "type": "boolean",
+          "description": "Whether the user is an anonymous user."
         }
       },
       "required": ["id", "userId", "sessionId", "joinedAt"]

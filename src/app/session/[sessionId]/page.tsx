@@ -194,6 +194,7 @@ function SessionPageContent() {
       joinedAt: serverTimestamp(),
       displayName: user.displayName,
       photoURL: user.photoURL,
+      isAnonymous: user.isAnonymous,
     };
 
     setDoc(participantRef, participantData).catch(async (serverError) => {
