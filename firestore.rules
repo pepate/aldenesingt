@@ -155,3 +155,22 @@ service cloud.firestore {
     }
   }
 }
+
+/**
+ * @description Firebase Storage Security Rules
+ * These rules govern access to files stored in Firebase Storage.
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+    /**
+     * @description Manages user-specific documents.
+     * @path /documents/{userId}/{allPaths=**}
+     * @allow (read, write) An authenticated user can read and write to their own documents folder.
+     * @deny Any user trying to access another user's documents.
+     * @principle Enforces strict ownership for all files within a user's private directory.
+     */
+    match /documents/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
