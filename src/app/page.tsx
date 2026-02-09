@@ -90,50 +90,61 @@ function SessionCard({
     }
   };
 
+  const hasArtwork = !songLoading && song?.artworkUrl;
+
   return (
-    <Card className="flex flex-col">
-      <CardHeader>
+    <Card className="flex flex-col group relative overflow-hidden">
+      {hasArtwork && (
+        <>
+          <Image
+            src={song.artworkUrl!}
+            alt={song.title || 'Artwork'}
+            fill
+            className="object-cover -z-10 transition-transform duration-300 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent -z-10" />
+        </>
+      )}
+      <CardHeader className="relative">
         <div className="flex justify-between items-start gap-4">
           <div>
             {songLoading ? (
-              <div className="h-5 w-3/4 bg-muted rounded animate-pulse mb-1" />
+              <div className={`h-5 w-3/4 rounded animate-pulse mb-1 ${hasArtwork ? 'bg-white/20' : 'bg-muted'}`} />
             ) : (
-              <CardTitle className="truncate leading-tight text-lg">
+              <CardTitle className={`truncate leading-tight text-lg ${hasArtwork ? 'text-white' : ''}`}>
                 {song?.title || 'Unbekannter Song'}
               </CardTitle>
             )}
-            <CardDescription className="mt-1">
-              {song?.artist || ' '}
+            <CardDescription className={`mt-1 ${hasArtwork ? 'text-white/80' : ''}`}>
+              {songLoading ? (
+                <div className={`h-4 w-1/2 rounded animate-pulse ${hasArtwork ? 'bg-white/20' : 'bg-muted'}`} />
+              ) : (
+                 song?.artist || ' '
+              )}
             </CardDescription>
           </div>
-          {songLoading ? (
-            <div className="w-12 h-12 flex-shrink-0 bg-muted rounded-md animate-pulse" />
-          ) : song?.artworkUrl ? (
-            <Image
-              src={song.artworkUrl}
-              alt={song.title || 'Artwork'}
-              width={48}
-              height={48}
-              className="rounded-md object-cover aspect-square flex-shrink-0"
-            />
-          ) : (
-            <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-muted rounded-md text-muted-foreground">
-              <Music className="h-6 w-6" />
-            </div>
+          {!hasArtwork && (
+             songLoading ? (
+                <div className="w-12 h-12 flex-shrink-0 bg-muted rounded-md animate-pulse" />
+            ) : (
+                <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-muted rounded-md text-muted-foreground">
+                    <Music className="h-6 w-6" />
+                </div>
+            )
           )}
         </div>
       </CardHeader>
-      <CardContent className="flex-grow flex items-center justify-between text-sm text-muted-foreground pt-0">
-        <div className="flex items-center gap-2">
+      <CardContent className="flex-grow flex items-center justify-between text-sm pt-0 relative">
+        <div className={`flex items-center gap-2 ${hasArtwork ? 'text-white/80' : 'text-muted-foreground'}`}>
           <Users className="h-4 w-4" />
           {participantsLoading ? (
-            <div className="h-4 w-8 bg-muted rounded animate-pulse" />
+            <div className={`h-4 w-8 rounded animate-pulse ${hasArtwork ? 'bg-white/20' : 'bg-muted'}`} />
           ) : (
             <span>{participants?.length || 0} Teilnehmer</span>
           )}
         </div>
       </CardContent>
-      <CardFooter className="flex justify-between items-center gap-2">
+      <CardFooter className="flex justify-between items-center gap-2 relative">
         <Button className="w-full" onClick={handleJoin}>
           <LogIn className="mr-2" />
           Beitreten
