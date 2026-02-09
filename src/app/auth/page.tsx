@@ -48,12 +48,19 @@ function AuthPage() {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during Google sign-in:', error);
+      let description = 'Mit Google konnte nicht angemeldet werden.';
+      if (error.code === 'auth/unauthorized-domain') {
+        description =
+          'Diese Domain ist für die Google-Anmeldung nicht autorisiert. Bitte fügen Sie die Domain in den Firebase-Projekteinstellungen unter "Authentication -> Sign-in method -> Authorized domains" hinzu.';
+      } else if (error.message) {
+        description = error.message;
+      }
       toast({
         variant: 'destructive',
         title: 'Anmeldung fehlgeschlagen',
-        description: 'Mit Google konnte nicht angemeldet werden.',
+        description: description,
       });
     }
   };
