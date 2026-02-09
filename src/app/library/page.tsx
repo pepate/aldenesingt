@@ -10,6 +10,7 @@ import {
   Loader2,
   ArrowLeft,
   Share2,
+  Library as LibraryIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,7 +23,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { useUser, useCollection, useFirebase, uploadFile } from '@/firebase';
+import { useUser, useCollection, useFirebase, uploadFile, deleteFile } from '@/firebase';
 import {
   collection,
   addDoc,
@@ -130,7 +131,9 @@ function LibraryPage() {
     if (!firestore || !user) return;
     try {
       // First, delete the file from Storage
-      // await deleteFile(docToDelete.storagePath); // This function needs to be created in firebase/storage.ts
+      if (docToDelete.storagePath) {
+        await deleteFile(docToDelete.storagePath);
+      }
       
       // Then, delete the document from Firestore
       const docRef = doc(firestore, 'users', user.uid, 'pdf_documents', docToDelete.id);
@@ -153,7 +156,7 @@ function LibraryPage() {
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
     
-    const sessionId = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const sessionId = Math.random().toString(36).substring(2, 5).toUpperCase();
 
     try {
       const sessionCollection = collection(firestore, 'sessions');
@@ -187,7 +190,7 @@ function LibraryPage() {
   if (!user) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-background text-center p-4">
-        <Library className="h-16 w-16 text-primary mb-4" />
+        <LibraryIcon className="h-16 w-16 text-primary mb-4" />
         <h2 className="text-2xl font-bold">Bitte anmelden</h2>
         <p className="text-muted-foreground mt-2 mb-6">
           Sie müssen angemeldet sein, um Ihre Bibliothek zu sehen.
@@ -207,7 +210,7 @@ function LibraryPage() {
         Zurück zur Startseite
       </Button>
       <h1 className="text-4xl font-bold mb-8 flex items-center gap-3">
-        <Library className="h-10 w-10 text-primary" />
+        <LibraryIcon className="h-10 w-10 text-primary" />
         Meine Dokumenten-Bibliothek
       </h1>
 

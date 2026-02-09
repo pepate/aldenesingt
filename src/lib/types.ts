@@ -16,4 +16,5 @@ export type PdfDocument = {
   url: string;
   userId: string;
   createdAt: any;
+  storagePath: string;
 };
