@@ -31,6 +31,7 @@ export type Session = {
   hostId: string;
   transpose: number;
   createdAt: any;
+  lastActivity: any;
 };
 
 export type SessionParticipant = {
@@ -40,6 +41,7 @@ export type SessionParticipant = {
   joinedAt: any;
   displayName: string | null;
   photoURL: string | null;
+  isAnonymous: boolean;
 };
 
 export type UserProfile = {

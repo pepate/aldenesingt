@@ -215,6 +215,7 @@ function LibraryPage() {
         scroll: 0,
         transpose: 0,
         createdAt: serverTimestamp(),
+        lastActivity: serverTimestamp(),
       });
       router.push(`/session/${sessionId}?host=true`);
     } catch (error) {
@@ -235,22 +236,22 @@ function LibraryPage() {
     );
   }
 
-  if (!user) {
+  if (!user || !userProfile || (userProfile.role !== 'creator' && userProfile.role !== 'admin')) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-background text-center p-4">
         <LibraryIcon className="h-16 w-16 text-primary mb-4" />
-        <h2 className="text-2xl font-bold">Bitte anmelden</h2>
+        <h2 className="text-2xl font-bold">Zugriff verweigert</h2>
         <p className="text-muted-foreground mt-2 mb-6">
-          Sie müssen angemeldet sein, um die Bibliothek zu sehen.
+          Sie müssen ein "Creator" oder "Admin" sein, um die Bibliothek zu sehen.
         </p>
-        <Button onClick={() => router.push('/auth')}>
+        <Button onClick={() => router.push('/')}>
           <LogIn className="mr-2" />
-          Zur Anmeldung
+          Zurück zur Startseite
         </Button>
       </div>
     );
   }
-
+  
   const canGenerate =
     userProfile?.role === 'creator' || userProfile?.role === 'admin';
 

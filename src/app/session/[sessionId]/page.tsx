@@ -212,7 +212,7 @@ function SessionPageContent() {
 
     try {
       // Reset transpose when song changes
-      await updateDoc(sessionRef, { songId: newSongId, scroll: 0, transpose: 0 });
+      await updateDoc(sessionRef, { songId: newSongId, scroll: 0, transpose: 0, lastActivity: serverTimestamp() });
       const newDoc = allSongs?.find((d) => d.id === newSongId);
       toast({
         title: 'Song gewechselt',
@@ -231,15 +231,20 @@ function SessionPageContent() {
     if (!sessionRef || !isHost || session === null) return;
 
     const newTranspose = (session.transpose || 0) + amount;
+    const updateData = { 
+      transpose: newTranspose,
+      lastActivity: serverTimestamp() 
+    };
+
     try {
-      await updateDoc(sessionRef, { transpose: newTranspose });
+      await updateDoc(sessionRef, updateData);
     } catch (error: any) {
       console.error("Failed to update transpose value:", error);
       if (error.code === 'permission-denied') {
          const permissionError = new FirestorePermissionError({
             path: sessionRef.path,
             operation: 'update',
-            requestResourceData: { transpose: newTranspose },
+            requestResourceData: updateData,
           });
           errorEmitter.emit('permission-error', permissionError);
       } else {
@@ -295,9 +300,9 @@ function SessionPageContent() {
       <header className="flex items-center justify-between p-3 border-b shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" asChild>
-            <Link href="/library">
+            <Link href="/">
               <ArrowLeft />
-              <span className="sr-only">Zurück zur Bibliothek</span>
+              <span className="sr-only">Zurück zur Startseite</span>
             </Link>
           </Button>
           <div className="flex items-center gap-2">
@@ -360,13 +365,13 @@ function SessionPageContent() {
                           />
                         )}
                         <AvatarFallback>
-                          {p.displayName
+                          {p.isAnonymous ? 'A' : (p.displayName
                             ? p.displayName.charAt(0).toUpperCase()
-                            : 'A'}
+                            : 'U')}
                         </AvatarFallback>
                       </Avatar>
                       <span className="text-sm truncate">
-                        {p.displayName || 'Anonymer Nutzer'}
+                        {p.isAnonymous ? `Anonym (${p.id.substring(0,4)})` : (p.displayName || 'Anonymer Nutzer')}
                       </span>
                     </li>
                   ))

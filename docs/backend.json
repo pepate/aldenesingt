@@ -142,9 +142,14 @@
           "type": "string",
           "format": "date-time",
           "description": "The timestamp when the session was created."
+        },
+        "lastActivity": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last interaction to enable TTL."
         }
       },
-      "required": ["id", "hostId", "songId", "scroll", "createdAt"]
+      "required": ["id", "hostId", "songId", "scroll", "createdAt", "lastActivity"]
     },
     "SessionParticipant": {
       "title": "Session Participant",
@@ -182,7 +187,7 @@
     }
   },
   "auth": {
-    "providers": ["google.com", "password"]
+    "providers": ["google.com", "password", "anonymous"]
   },
   "firestore": {
     "/users/{userId}": {

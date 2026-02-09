@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useCallback, useMemo } from 'react';
-import { DocumentReference, onSnapshot, updateDoc } from 'firebase/firestore';
+import { DocumentReference, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import type { Session, Song } from '@/lib/types';
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
 import { transposeSongSheet } from '@/lib/transpose';
@@ -45,12 +45,16 @@ export default function SongViewer({
   const sendScrollUpdate = useCallback(
     (scrollTop: number) => {
       if (sessionRef) {
-        updateDoc(sessionRef, { scroll: scrollTop }).catch(async (error) => {
+        const updateData = { 
+            scroll: scrollTop,
+            lastActivity: serverTimestamp() 
+        };
+        updateDoc(sessionRef, updateData).catch(async (error) => {
           if (error.code === 'permission-denied') {
             const permissionError = new FirestorePermissionError({
               path: sessionRef.path,
               operation: 'update',
-              requestResourceData: { scroll: scrollTop },
+              requestResourceData: updateData,
             });
             errorEmitter.emit('permission-error', permissionError);
           } else {

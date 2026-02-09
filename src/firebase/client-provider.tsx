@@ -7,7 +7,7 @@ import React, {
   useMemo,
 } from 'react';
 import { FirebaseApp } from 'firebase/app';
-import { Auth, getAuth, onAuthStateChanged, User } from 'firebase/auth';
+import { Auth, getAuth, onAuthStateChanged, User, signInAnonymously } from 'firebase/auth';
 import {
   Firestore,
   getFirestore,
@@ -49,30 +49,39 @@ export function FirebaseClientProvider({
     const unsubscribe = onAuthStateChanged(
       auth,
       async (user) => {
-        if (user && firestore) {
-          const userRef = doc(firestore, 'users', user.uid);
-          const userDoc = await getDoc(userRef);
+        if (user) {
+           // User is signed in (regular or anonymous)
+          if (firestore) {
+            const userRef = doc(firestore, 'users', user.uid);
+            const userDoc = await getDoc(userRef);
 
-          if (!userDoc.exists()) {
-            // If the user profile doesn't exist, create it.
-            try {
-              await setDoc(userRef, {
-                id: user.uid,
-                email: user.email,
-                displayName: user.displayName,
-                photoURL: user.photoURL,
-                createdAt: serverTimestamp(),
-                role: 'user', // Default role for all new users
-                songsGeneratedToday: 0,
-                lastGenerationDate: '',
-              });
-            } catch (error) {
-              console.error("Failed to create user profile:", error);
+            if (!userDoc.exists()) {
+              // If the user profile doesn't exist, create it.
+              try {
+                await setDoc(userRef, {
+                  id: user.uid,
+                  email: user.email,
+                  displayName: user.displayName,
+                  photoURL: user.photoURL,
+                  createdAt: serverTimestamp(),
+                  role: 'user', // Default role for all new users
+                  songsGeneratedToday: 0,
+                  lastGenerationDate: '',
+                });
+              } catch (error) {
+                console.error("Failed to create user profile:", error);
+              }
             }
           }
+          setUser(user);
+          setLoading(false);
+        } else {
+           // No user. Sign in anonymously. The listener will re-run with the new user.
+           signInAnonymously(auth).catch(err => {
+              console.error("Anonymous sign-in failed", err);
+              setLoading(false); // Stop loading even if anon sign-in fails
+           });
         }
-        setUser(user);
-        setLoading(false);
       },
       (error) => {
         console.error('Auth state change error:', error);
