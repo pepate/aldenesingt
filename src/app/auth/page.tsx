@@ -2,13 +2,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  getAuth,
   GoogleAuthProvider,
   signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { useUser } from '@/firebase';
+import { useUser, useAuth } from '@/firebase';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,7 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 function AuthPage() {
   const { user, loading } = useUser();
   const router = useRouter();
-  const auth = getAuth();
+  const auth = useAuth();
   const { toast } = useToast();
 
   const [email, setEmail] = useState('');
@@ -45,6 +44,7 @@ function AuthPage() {
   }, [user, loading, router]);
 
   const handleGoogleSignIn = async () => {
+    if (!auth) return;
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
@@ -60,6 +60,7 @@ function AuthPage() {
 
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth) return;
     try {
       await createUserWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
@@ -74,6 +75,7 @@ function AuthPage() {
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth) return;
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
@@ -87,7 +89,7 @@ function AuthPage() {
   };
 
 
-  if (loading) {
+  if (loading || !auth) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
