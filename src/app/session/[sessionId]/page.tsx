@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -13,6 +13,8 @@ import {
   AlertTriangle,
   Users,
   QrCode,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 
@@ -209,7 +211,8 @@ function SessionPageContent() {
     if (!sessionRef || !isHost) return;
 
     try {
-      await updateDoc(sessionRef, { songId: newSongId, scroll: 0 });
+      // Reset transpose when song changes
+      await updateDoc(sessionRef, { songId: newSongId, scroll: 0, transpose: 0 });
       const newDoc = allSongs?.find((d) => d.id === newSongId);
       toast({
         title: 'Song gewechselt',
@@ -221,6 +224,31 @@ function SessionPageContent() {
         title: 'Fehler',
         description: 'Konnte den Song nicht wechseln.',
       });
+    }
+  };
+
+  const handleTranspose = async (amount: number) => {
+    if (!sessionRef || !isHost || session === null) return;
+
+    const newTranspose = (session.transpose || 0) + amount;
+    try {
+      await updateDoc(sessionRef, { transpose: newTranspose });
+    } catch (error: any) {
+      console.error("Failed to update transpose value:", error);
+      if (error.code === 'permission-denied') {
+         const permissionError = new FirestorePermissionError({
+            path: sessionRef.path,
+            operation: 'update',
+            requestResourceData: { transpose: newTranspose },
+          });
+          errorEmitter.emit('permission-error', permissionError);
+      } else {
+        toast({
+            variant: "destructive",
+            title: "Fehler",
+            description: "Transponierung konnte nicht geändert werden.",
+        });
+      }
     }
   };
 
@@ -352,6 +380,32 @@ function SessionPageContent() {
             </PopoverContent>
           </Popover>
 
+          {isHost && (
+            <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => handleTranspose(-1)}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <span className="font-mono text-sm font-semibold w-8 text-center">
+                {(session?.transpose || 0) > 0
+                  ? `+${session?.transpose}`
+                  : session?.transpose || 0}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => handleTranspose(1)}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-muted-foreground">
             {isHost ? (
               <Crown className="h-5 w-5 text-amber-400" />
@@ -403,13 +457,14 @@ function SessionPageContent() {
         </div>
       </header>
       <main className="flex-1 overflow-hidden">
-        {currentSong && sessionRef && (
+        {currentSong && sessionRef && session && (
           <SongViewer
             songContent={currentSong.content}
             sessionId={sessionId}
             isHost={isHost}
             sessionRef={sessionRef}
             initialScroll={session.scroll}
+            transpose={session.transpose || 0}
           />
         )}
          {!currentSong && !currentSongLoading && (

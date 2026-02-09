@@ -85,6 +85,10 @@
           "type": "number",
           "description": "The current scroll position of the document."
         },
+        "transpose": {
+          "type": "number",
+          "description": "The number of semitones to transpose the chords. Default is 0."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",

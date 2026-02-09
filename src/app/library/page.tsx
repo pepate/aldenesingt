@@ -40,6 +40,9 @@ import {
   deleteDoc,
   doc,
   setDoc,
+  query,
+  where,
+  getDocs,
 } from 'firebase/firestore';
 import type { Song } from '@/lib/types';
 import {
@@ -74,6 +77,7 @@ function LibraryPage() {
   const [url, setUrl] = useState('');
   const [isImportingUrl, setIsImportingUrl] = useState(false);
 
+  // This query fetches songs for everyone.
   const songsRef = useMemoFirebase(
     () => (firestore ? collection(firestore, 'songs') : null),
     [firestore]
@@ -101,7 +105,7 @@ function LibraryPage() {
   };
 
   const handleProcessAndUpload = async () => {
-    if (!file || !user || !firestore || !songsRef) {
+    if (!file || !user || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Fehlende Informationen',
@@ -133,7 +137,8 @@ function LibraryPage() {
         await uploadFile(storagePath, file);
 
         // 4. Save extracted content to Firestore
-        await addDoc(songsRef, {
+        const songsCollectionRef = collection(firestore, 'songs');
+        await addDoc(songsCollectionRef, {
           userId: user.uid,
           title: extractedData.title,
           content: extractedData.content,
@@ -166,7 +171,7 @@ function LibraryPage() {
   };
 
   const handleImportFromUrl = async () => {
-    if (!url || !user || !firestore || !songsRef) {
+    if (!url || !user || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Fehlende Informationen',
@@ -187,7 +192,8 @@ function LibraryPage() {
       }
 
       // Save extracted content to Firestore
-      await addDoc(songsRef, {
+      const songsCollectionRef = collection(firestore, 'songs');
+      await addDoc(songsCollectionRef, {
         userId: user.uid,
         title: extractedData.title,
         content: extractedData.content,
@@ -213,14 +219,14 @@ function LibraryPage() {
     }
   };
 
-  const handleDelete = async (songToDelete: Song) => {
+ const handleDelete = async (songToDelete: Song) => {
     if (!firestore || !user || user.uid !== songToDelete.userId) return;
     try {
-      // First, delete the file from Storage
+      // First, delete the file from Storage if it exists
       if (songToDelete.storagePath) {
         await deleteFile(songToDelete.storagePath);
       }
-
+      
       // Then, delete the document from Firestore
       const docRef = doc(firestore, 'songs', songToDelete.id);
       await deleteDoc(docRef);
@@ -238,7 +244,7 @@ function LibraryPage() {
       });
     }
   };
-
+  
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
 
@@ -251,6 +257,7 @@ function LibraryPage() {
         hostId: user.uid,
         songId: songId,
         scroll: 0,
+        transpose: 0,
         createdAt: serverTimestamp(),
       });
       router.push(`/session/${sessionId}?host=true`);

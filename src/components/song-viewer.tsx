@@ -1,9 +1,10 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useMemo } from 'react';
 import { DocumentReference, onSnapshot, updateDoc } from 'firebase/firestore';
 import type { Session } from '@/lib/types';
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
+import { transposeContent } from '@/lib/transpose';
 
 interface SongViewerProps {
   songContent: string;
@@ -11,6 +12,7 @@ interface SongViewerProps {
   isHost: boolean;
   sessionRef: DocumentReference<Session> | null;
   initialScroll: number;
+  transpose: number;
 }
 
 const DEBOUNCE_TIME = 200;
@@ -20,10 +22,18 @@ export default function SongViewer({
   isHost,
   sessionRef,
   initialScroll,
+  transpose,
 }: SongViewerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isUpdatingByListener = useRef(false);
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // Memoize the transposed content. It will update for everyone
+  // when the `transpose` prop changes (which comes from the session doc).
+  const transposedContent = useMemo(() => {
+    return transposeContent(songContent, transpose);
+  }, [songContent, transpose]);
+
 
   // Reset scroll when content changes
   useEffect(() => {
@@ -128,7 +138,7 @@ export default function SongViewer({
       }}
     >
       <pre className="text-sm sm:text-base font-code whitespace-pre-wrap">
-        {songContent}
+        {transposedContent}
       </pre>
     </div>
   );

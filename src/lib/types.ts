@@ -12,6 +12,7 @@ export type Session = {
   songId: string;
   scroll: number;
   hostId: string;
+  transpose: number;
   createdAt: any;
 };
 
