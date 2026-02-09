@@ -1,9 +1,11 @@
 'use client';
 
-import { LogOut, Library } from 'lucide-react';
+import { LogOut, Library, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
-import { useAuth, useUser } from '@/firebase';
+import { useAuth, useUser, useFirebase, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { UserProfile } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,11 +17,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Skeleton } from './ui/skeleton';
 
 export function UserNav() {
   const { user } = useUser();
   const auth = useAuth();
+  const { firestore } = useFirebase();
   const router = useRouter();
+
+  const userProfileRef = useMemoFirebase(
+    () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
+    [firestore, user]
+  );
+  const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userProfileRef);
 
   const handleSignOut = async () => {
     if (auth) {
@@ -41,6 +51,10 @@ export function UserNav() {
     }
     return name.charAt(0).toUpperCase();
   };
+  
+  const canSeeAdmin = userProfile?.role === 'admin' || userProfile?.role === 'superadmin';
+  const canSeeLibrary = userProfile?.role === 'creator' || userProfile?.role === 'admin' || userProfile?.role === 'superadmin';
+
 
   return (
     <DropdownMenu>
@@ -57,22 +71,46 @@ export function UserNav() {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">
-              {user.displayName || 'Benutzer'}
-            </p>
-            {user.email && (
-              <p className="text-xs leading-none text-muted-foreground">
-                {user.email}
-              </p>
-            )}
+             {profileLoading ? (
+                <>
+                    <Skeleton className="h-4 w-24"/>
+                    <Skeleton className="h-3 w-32"/>
+                </>
+             ) : (
+                <>
+                 <p className="text-sm font-medium leading-none">
+                    {userProfile?.displayName || user.displayName || 'Benutzer'}
+                 </p>
+                 {user.email && (
+                    <p className="text-xs leading-none text-muted-foreground">
+                        {user.email}
+                    </p>
+                 )}
+                </>
+             )}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => router.push('/library')}>
-            <Library className="mr-2 h-4 w-4" />
-            <span>Bibliothek</span>
-          </DropdownMenuItem>
+          {profileLoading ? (
+             <Skeleton className="h-8 w-full rounded-sm"/>
+          ) : (
+             <>
+                {canSeeLibrary && (
+                    <DropdownMenuItem onClick={() => router.push('/library')}>
+                        <Library className="mr-2 h-4 w-4" />
+                        <span>Bibliothek</span>
+                    </DropdownMenuItem>
+                )}
+                {canSeeAdmin && (
+                    <DropdownMenuItem onClick={() => router.push('/admin')}>
+                        <Shield className="mr-2 h-4 w-4" />
+                        <span>Benutzer verwalten</span>
+                    </DropdownMenuItem>
+                )}
+             </>
+          )}
+
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut}>

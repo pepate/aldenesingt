@@ -131,7 +131,11 @@ function LibraryPage() {
       return;
     }
 
-    if (userProfile.role !== 'creator' && userProfile.role !== 'admin') {
+    if (
+      userProfile.role !== 'creator' &&
+      userProfile.role !== 'admin' &&
+      userProfile.role !== 'superadmin'
+    ) {
       toast({
         variant: 'destructive',
         title: 'Keine Berechtigung',
@@ -223,7 +227,7 @@ function LibraryPage() {
     if (
       !firestore ||
       !user ||
-      (user.uid !== songToDelete.userId && userProfile?.role !== 'admin')
+      (user.uid !== songToDelete.userId && userProfile?.role !== 'admin' && userProfile?.role !== 'superadmin')
     )
       return;
     try {
@@ -290,7 +294,9 @@ function LibraryPage() {
   if (
     !user ||
     !userProfile ||
-    (userProfile.role !== 'creator' && userProfile.role !== 'admin')
+    (userProfile.role !== 'creator' &&
+      userProfile.role !== 'admin' &&
+      userProfile.role !== 'superadmin')
   ) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-background text-center p-4">
@@ -309,7 +315,9 @@ function LibraryPage() {
   }
 
   const canGenerate =
-    userProfile?.role === 'creator' || userProfile?.role === 'admin';
+    userProfile?.role === 'creator' ||
+    userProfile?.role === 'admin' ||
+    userProfile?.role === 'superadmin';
 
   return (
     <div className="min-h-screen bg-background">
@@ -565,7 +573,7 @@ function LibraryPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {(user?.uid === songItem.userId ||
-                          userProfile?.role === 'admin') && (
+                          userProfile?.role === 'admin' || userProfile?.role === 'superadmin') && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="ghost" size="icon">

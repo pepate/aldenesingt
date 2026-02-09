@@ -10,21 +10,19 @@
  * - 'user': Can view/join sessions. Can "upgrade" to a permanent account. Includes anonymous users.
  * - 'creator': Can do everything a 'user' can, plus create sessions and generate a limited number of new songs per day.
  * - 'admin': Has full access, including the ability to manage user roles and create sessions.
+ * - 'superadmin': Same as admin, but their role cannot be changed by another admin.
  *
  * Data Structure & Access:
  * - /users/{userId}: Private user profile, contains the 'role'.
- *   - Users can read their own profile.
- *   - Admins can read and write to any profile (to manage roles).
+ *   - Admins/Superadmins can list and read all user profiles.
+ *   - Admins/Superadmins can update any user's profile/role, except for 'superadmin' roles.
  *   - Users can update their own profile but are NOT allowed to change their own role.
  * - /songs/{songId}: Publicly-readable songs.
  *   - Reading is allowed by everyone (including anonymous).
- *   - Creating songs is restricted to 'creator' and 'admin' roles.
- *   - Updating/Deleting a song is restricted to the original author.
+ *   - Creating songs is restricted to 'creator', 'admin', and 'superadmin' roles.
  * - /sessions/{sessionId}: Collaborative sessions.
  *   - Reading and listing is public for all users (including anonymous).
- *   - Session creation is restricted to 'creator' and 'admin' roles.
- *   - Managed by a 'host', who has full control over updating the session (scroll, transpose).
- *
+ *   - Session creation is restricted to 'creator', 'admin', and 'superadmin' roles.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -45,9 +43,6 @@ service cloud.firestore {
     }
 
     function isRole(role) {
-        // Check for isSignedIn is important because anonymous users will have a UID
-        // but their user document might not exist yet or they may not have a role.
-        // For our case, we assume a user doc is created with a default 'user' role.
         return isSignedIn() && getUserData(request.auth.uid).role == role;
     }
 
@@ -55,8 +50,20 @@ service cloud.firestore {
         return isRole('admin');
     }
 
-    function isCreatorOrAdmin() {
-        return isSignedIn() && (isRole('creator') || isRole('admin'));
+    function isSuperAdmin() {
+        return isRole('superadmin');
+    }
+
+    function isCreator() {
+        return isRole('creator');
+    }
+    
+    function canManageUsers() {
+        return isAdmin() || isSuperAdmin();
+    }
+
+    function canCreateContent() {
+        return isCreator() || isAdmin() || isSuperAdmin();
     }
 
     function isHost(sessionId) {
@@ -68,13 +75,15 @@ service cloud.firestore {
      * @path /users/{userId}
      */
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if false; // Prevent listing all users
-      // Allow creation for any signed-in user (including anonymous users getting their profile doc created)
+      allow get: if isOwner(userId) || canManageUsers();
+      allow list: if canManageUsers();
       allow create: if isOwner(userId);
-      // Allow update if user is an admin, OR if the user is the owner and is NOT changing their own role.
-      allow update: if isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role);
-      allow delete: if isAdmin() || isOwner(userId);
+      // 1. Owners can update their own profile, but cannot change their role.
+      // 2. Admins/Superadmins can update a user's profile...
+      // 3. ...UNLESS that user is a superadmin. This protects superadmins from demotion.
+      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role)
+                    || (canManageUsers() && resource.data.role != 'superadmin');
+      allow delete: if canManageUsers() || isOwner(userId);
     }
 
     /**
@@ -82,11 +91,8 @@ service cloud.firestore {
      * @path /songs/{songId}
      */
     match /songs/{songId} {
-        // All users, including anonymous, can read songs
         allow read: if true;
-        // Creation is restricted to users with 'creator' or 'admin' role.
-        allow create: if isCreatorOrAdmin() && request.resource.data.userId == request.auth.uid;
-        // Only the original author can update or delete their song.
+        allow create: if canCreateContent() && request.resource.data.userId == request.auth.uid;
         allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
@@ -95,26 +101,19 @@ service cloud.firestore {
      * @path /sessions/{sessionId}
      */
     match /sessions/{sessionId} {
-      // Anyone can see the list of sessions and view a specific session's details
       allow get, list: if true;
-      // Session creation is limited to creators and admins
-      allow create: if isCreatorOrAdmin() && request.resource.data.hostId == request.auth.uid;
-      // Only the host can update the session (scroll, transpose, song change)
+      allow create: if canCreateContent() && request.resource.data.hostId == request.auth.uid;
       allow update: if isSignedIn() && isHost(sessionId);
-      // Only the host or an admin can delete the session
-      allow delete: if isSignedIn() && (isHost(sessionId) || isAdmin());
+      allow delete: if isSignedIn() && (isHost(sessionId) || canManageUsers());
 
       /**
        * @description Manages participants within a session.
        * @path /sessions/{sessionId}/sessionParticipants/{sessionParticipantId}
        */
       match /sessionParticipants/{sessionParticipantId} {
-        // Anyone can see who is in a session
         allow get, list: if true;
-        // Any signed-in user (including anonymous) can join a session
         allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.sessionId == sessionId;
         allow update: if false;
-        // A user can leave, or the host can remove them.
         allow delete: if resource != null && (isOwner(resource.data.userId) || isHost(sessionId));
       }
     }

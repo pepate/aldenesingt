@@ -138,7 +138,8 @@ function SessionCard({
           <LogIn className="mr-2" />
           Beitreten
         </Button>
-        {userProfile?.role === 'admin' && (
+        {(userProfile?.role === 'admin' ||
+          userProfile?.role === 'superadmin') && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="icon">
@@ -190,7 +191,9 @@ function HomeComponent() {
 
   const showLibrary =
     userProfile &&
-    (userProfile.role === 'creator' || userProfile.role === 'admin');
+    (userProfile.role === 'creator' ||
+      userProfile.role === 'admin' ||
+      userProfile.role === 'superadmin');
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
