@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Music, LogIn, Library, Loader2, Users, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,7 +12,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useUser, useCollection, useFirebase, useDoc, useMemoFirebase } from '@/firebase';
+import {
+  useUser,
+  useCollection,
+  useFirebase,
+  useDoc,
+  useMemoFirebase,
+} from '@/firebase';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { UserNav } from '@/components/user-nav';
 import type {
@@ -21,7 +28,6 @@ import type {
   UserProfile,
 } from '@/lib/types';
 import { collection, doc, deleteDoc } from 'firebase/firestore';
-import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -87,16 +93,37 @@ function SessionCard({
   return (
     <Card className="flex flex-col">
       <CardHeader>
-        {songLoading ? (
-          <div className="h-6 w-3/4 bg-muted rounded animate-pulse" />
-        ) : (
-          <CardTitle className="truncate">
-            {song?.title || 'Unbekannter Song'}
-          </CardTitle>
-        )}
-        <CardDescription>{song?.artist || ' '}</CardDescription>
+        <div className="flex justify-between items-start gap-4">
+          <div>
+            {songLoading ? (
+              <div className="h-5 w-3/4 bg-muted rounded animate-pulse mb-1" />
+            ) : (
+              <CardTitle className="truncate leading-tight text-lg">
+                {song?.title || 'Unbekannter Song'}
+              </CardTitle>
+            )}
+            <CardDescription className="mt-1">
+              {song?.artist || ' '}
+            </CardDescription>
+          </div>
+          {songLoading ? (
+            <div className="w-12 h-12 flex-shrink-0 bg-muted rounded-md animate-pulse" />
+          ) : song?.artworkUrl ? (
+            <Image
+              src={song.artworkUrl}
+              alt={song.title || 'Artwork'}
+              width={48}
+              height={48}
+              className="rounded-md object-cover aspect-square flex-shrink-0"
+            />
+          ) : (
+            <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-muted rounded-md text-muted-foreground">
+              <Music className="h-6 w-6" />
+            </div>
+          )}
+        </div>
       </CardHeader>
-      <CardContent className="flex-grow flex items-center justify-between text-sm text-muted-foreground">
+      <CardContent className="flex-grow flex items-center justify-between text-sm text-muted-foreground pt-0">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4" />
           {participantsLoading ? (
@@ -162,7 +189,8 @@ function HomeComponent() {
   const loading = userLoading || profileLoading || sessionsLoading;
 
   const showLibrary =
-    userProfile && (userProfile.role === 'creator' || userProfile.role === 'admin');
+    userProfile &&
+    (userProfile.role === 'creator' || userProfile.role === 'admin');
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -202,12 +230,17 @@ function HomeComponent() {
         {loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[...Array(4)].map((_, i) => (
-              <Card key={i} className="h-[220px]">
+              <Card key={i}>
                 <CardHeader>
-                  <div className="h-6 w-3/4 bg-muted rounded animate-pulse" />
-                  <div className="h-4 w-1/2 bg-muted rounded animate-pulse mt-2" />
+                  <div className="flex justify-between items-start gap-4">
+                    <div>
+                      <div className="h-5 w-3/4 bg-muted rounded animate-pulse" />
+                      <div className="h-4 w-1/2 bg-muted rounded animate-pulse mt-2" />
+                    </div>
+                    <div className="h-12 w-12 bg-muted rounded-md animate-pulse flex-shrink-0" />
+                  </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-0">
                   <div className="h-5 w-1/3 bg-muted rounded animate-pulse" />
                 </CardContent>
                 <CardFooter>

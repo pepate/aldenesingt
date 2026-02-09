@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   Music,
@@ -161,7 +162,12 @@ function LibraryPage() {
 
     setIsGenerating(true);
     try {
-      const { songtitle, artist: songArtist, sheet } = await generateSongSheet({
+      const {
+        songtitle,
+        artist: songArtist,
+        sheet,
+        artworkUrl,
+      } = await generateSongSheet({
         title: songTitle,
         artist,
       });
@@ -178,6 +184,7 @@ function LibraryPage() {
         artist: songArtist,
         sheet: sheet,
         createdAt: serverTimestamp(),
+        artworkUrl: artworkUrl || null,
       });
 
       // Update generation count for creators
@@ -346,7 +353,24 @@ function LibraryPage() {
                       <SelectContent>
                         {songs?.map((song) => (
                           <SelectItem key={song.id} value={song.id}>
-                            {song.title} - {song.artist}
+                            <div className="flex items-center gap-3">
+                              {song.artworkUrl ? (
+                                <Image
+                                  src={song.artworkUrl}
+                                  alt={song.title}
+                                  width={24}
+                                  height={24}
+                                  className="rounded-sm object-cover"
+                                />
+                              ) : (
+                                <div className="w-6 h-6 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
+                                  <Music className="h-4 w-4" />
+                                </div>
+                              )}
+                              <span>
+                                {song.title} - {song.artist}
+                              </span>
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -447,17 +471,19 @@ function LibraryPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[40%]">Song</TableHead>
-                    <TableHead className="w-[25%]">Creator</TableHead>
-                    <TableHead className="w-[20%]">Erstellt am</TableHead>
-                    <TableHead className="text-right w-[15%]">
-                      Aktionen
-                    </TableHead>
+                    <TableHead className="w-[50px] p-2"></TableHead>
+                    <TableHead>Song</TableHead>
+                    <TableHead>Creator</TableHead>
+                    <TableHead>Erstellt am</TableHead>
+                    <TableHead className="text-right">Aktionen</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {[...Array(5)].map((_, i) => (
                     <TableRow key={i}>
+                      <TableCell className="p-2">
+                        <Skeleton className="h-10 w-10 rounded-sm" />
+                      </TableCell>
                       <TableCell>
                         <Skeleton className="h-5 w-3/4" />
                         <Skeleton className="h-4 w-1/2 mt-1" />
@@ -498,17 +524,31 @@ function LibraryPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px] p-2"></TableHead>
                     <TableHead className="w-[40%]">Song</TableHead>
                     <TableHead className="w-[25%]">Creator</TableHead>
                     <TableHead className="w-[20%]">Erstellt am</TableHead>
-                    <TableHead className="text-right w-[15%]">
-                      Aktionen
-                    </TableHead>
+                    <TableHead className="text-right">Aktionen</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {songs?.map((songItem) => (
                     <TableRow key={songItem.id}>
+                      <TableCell className="p-2">
+                        {songItem.artworkUrl ? (
+                          <Image
+                            src={songItem.artworkUrl}
+                            alt={songItem.title}
+                            width={40}
+                            height={40}
+                            className="rounded-sm object-cover"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
+                            <Music className="h-5 w-5" />
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium">{songItem.title}</div>
                         <div className="text-sm text-muted-foreground">

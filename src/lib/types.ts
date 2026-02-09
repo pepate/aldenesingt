@@ -23,6 +23,7 @@ export type Song = {
   title: string;
   artist: string;
   sheet: SongSheet;
+  artworkUrl?: string;
 };
 
 export type Session = {

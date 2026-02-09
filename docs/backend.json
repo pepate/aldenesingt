@@ -113,6 +113,11 @@
             }
           },
           "required": ["song"]
+        },
+        "artworkUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the song's or album's artwork."
         }
       },
       "required": ["userId", "createdAt", "title", "artist", "sheet"]

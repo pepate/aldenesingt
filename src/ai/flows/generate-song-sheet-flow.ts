@@ -43,6 +43,10 @@ const GenerateSongSheetOutputSchema = z.object({
   songtitle: z.string().describe('The title of the song.'),
   artist: z.string().describe('The artist of the song.'),
   sheet: SongSheetSchema,
+  artworkUrl: z
+    .string()
+    .optional()
+    .describe('URL for the song/album artwork.'),
 });
 export type GenerateSongSheetOutput = z.infer<
   typeof GenerateSongSheetOutputSchema
@@ -88,12 +92,43 @@ const generateSongSheetFlow = ai.defineFlow(
     outputSchema: GenerateSongSheetOutputSchema,
   },
   async (input) => {
+    // 1. Get song sheet from Gemini
     const { output } = await prompt(input);
     if (!output) {
       throw new Error(
         'Failed to generate song sheet. The model did not return any output.'
       );
     }
-    return output;
+
+    // 2. Fetch artwork from iTunes
+    let artworkUrl: string | undefined = undefined;
+    try {
+      const searchTerm = encodeURIComponent(`${input.artist} ${input.title}`);
+      const itunesResponse = await fetch(
+        `https://itunes.apple.com/search?term=${searchTerm}&entity=song&limit=1`
+      );
+      if (itunesResponse.ok) {
+        const itunesData = await itunesResponse.json();
+        if (
+          itunesData.resultCount > 0 &&
+          itunesData.results[0].artworkUrl100
+        ) {
+          artworkUrl = itunesData.results[0].artworkUrl100.replace(
+            '100x100',
+            '400x400'
+          ); // Get a larger image
+        }
+      }
+    } catch (e) {
+      console.error('Could not fetch artwork from iTunes', e);
+      // Do not throw an error, artwork is optional
+    }
+
+    return {
+      songtitle: output.songtitle,
+      artist: output.artist,
+      sheet: output.sheet,
+      artworkUrl,
+    };
   }
 );
