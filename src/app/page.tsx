@@ -10,6 +10,7 @@ import {
   Users,
   Trash2,
   Share2,
+  Crown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -98,6 +99,12 @@ function SessionCard({
   );
   const { data: participants, loading: participantsLoading } =
     useCollection<SessionParticipant>(participantsRef);
+    
+  const hostProfileRef = useMemoFirebase(
+    () => (firestore ? doc(firestore, 'users', session.hostId) : null),
+    [firestore, session.hostId]
+  );
+  const { data: hostProfile, loading: hostProfileLoading } = useDoc<UserProfile>(hostProfileRef);
 
   const handleJoin = () => {
     router.push(`/session/${session.id}`);
@@ -136,7 +143,7 @@ function SessionCard({
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent -z-10" />
         </>
       )}
-      <CardHeader className="relative">
+      <CardHeader className="relative flex-grow">
         <div className="flex justify-between items-start gap-4">
           <div>
             {songLoading ? (
@@ -165,14 +172,24 @@ function SessionCard({
           )}
         </div>
       </CardHeader>
-      <CardContent className="flex-grow flex items-center justify-between text-sm pt-0 relative">
-        <div className={`flex items-center gap-2 ${hasArtwork ? 'text-white/80' : 'text-muted-foreground'}`}>
-          <Users className="h-4 w-4" />
-          {participantsLoading ? (
-            <div className={`h-4 w-8 rounded animate-pulse ${hasArtwork ? 'bg-white/20' : 'bg-muted'}`} />
-          ) : (
-            <span>{participants?.length || 0} Teilnehmer</span>
-          )}
+      <CardContent className="flex-shrink-0 text-sm pt-0 relative">
+         <div className={`flex items-center gap-2 mb-2 ${hasArtwork ? 'text-white/80' : 'text-muted-foreground'}`}>
+            <Users className="h-4 w-4" />
+            {participantsLoading ? (
+                <div className={`h-4 w-24 rounded animate-pulse ${hasArtwork ? 'bg-white/20' : 'bg-muted'}`} />
+            ) : (
+                <span>{participants?.length || 0} Teilnehmer</span>
+            )}
+        </div>
+         <div className={`flex items-center gap-2 ${hasArtwork ? 'text-white/80' : 'text-muted-foreground'}`}>
+            <Crown className="h-4 w-4 text-amber-400" />
+            {hostProfileLoading ? (
+                <div className={`h-4 w-32 rounded animate-pulse ${hasArtwork ? 'bg-white/20' : 'bg-muted'}`} />
+            ) : (
+                <span className="truncate">
+                    {hostProfile?.displayName || 'Unbekannter Host'}
+                </span>
+            )}
         </div>
       </CardContent>
       <CardFooter className="flex justify-between items-center gap-2 relative">

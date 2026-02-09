@@ -20,6 +20,8 @@ import {
   X,
   ChevronsUpDown,
   Check,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { cloneDeep } from 'lodash';
@@ -65,6 +67,9 @@ import {
 } from 'firebase/firestore';
 import { UserNav } from '@/components/user-nav';
 import Image from 'next/image';
+import { Separator } from '@/components/ui/separator';
+
+const FONT_SIZES = ['text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl'];
 
 function SessionPageContent() {
   const params = useParams();
@@ -80,6 +85,14 @@ function SessionPageContent() {
   const [showChords, setShowChords] = useState(true);
   const [songSelectorOpen, setSongSelectorOpen] = useState(false);
   const [songSearch, setSongSearch] = useState('');
+  const [fontSizeIndex, setFontSizeIndex] = useState(2); // default to 'text-lg'
+
+  useEffect(() => {
+    const savedSizeIndex = localStorage.getItem('song-viewer-font-size-index');
+    if (savedSizeIndex) {
+      setFontSizeIndex(Number(savedSizeIndex));
+    }
+  }, []);
 
   const sessionId = Array.isArray(params.sessionId)
     ? params.sessionId[0].toUpperCase()
@@ -286,6 +299,15 @@ function SessionPageContent() {
         });
       }
     }
+  };
+
+  const handleFontSizeChange = (amount: number) => {
+    const newIndex = Math.max(
+      0,
+      Math.min(FONT_SIZES.length - 1, fontSizeIndex + amount)
+    );
+    setFontSizeIndex(newIndex);
+    localStorage.setItem('song-viewer-font-size-index', String(newIndex));
   };
 
   const handleSaveEdits = async () => {
@@ -531,6 +553,30 @@ function SessionPageContent() {
             </Label>
           </div>
 
+          {!isEditing && (
+            <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => handleFontSizeChange(-1)}
+              >
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <span className="font-mono text-sm font-semibold w-8 text-center">
+                Aa
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => handleFontSizeChange(1)}
+              >
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+
           {isHost && (
             <div className="flex items-center gap-1">
               {isEditing ? (
@@ -552,39 +598,38 @@ function SessionPageContent() {
                   </Button>
                 </div>
               ) : (
-                <>
+                <div className="flex items-center gap-1 rounded-md bg-muted p-1">
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-8 w-8"
+                    className="h-7 w-7"
                     onClick={() => setIsEditing(true)}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <div className="flex items-center gap-1 rounded-md bg-muted p-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => handleTranspose(-1)}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <span className="font-mono text-sm font-semibold w-8 text-center">
-                      {(session?.transpose || 0) > 0
-                        ? `+${session?.transpose}`
-                        : session?.transpose || 0}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => handleTranspose(1)}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </>
+                  <Separator orientation="vertical" className="h-5 mx-1" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleTranspose(-1)}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <span className="font-mono text-sm font-semibold w-8 text-center">
+                    {(session?.transpose || 0) > 0
+                      ? `+${session?.transpose}`
+                      : session?.transpose || 0}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleTranspose(1)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -653,6 +698,7 @@ function SessionPageContent() {
             sheet={editedSheet}
             onSheetChange={setEditedSheet}
             showChords={showChords}
+            fontSize={FONT_SIZES[fontSizeIndex]}
           />
         )}
         {!currentSong && !currentSongLoading && (

@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/tabs';
 import { Button } from './ui/button';
 import { ArrowLeftFromLine, CornerDownLeft } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 interface SongViewerProps {
   song: Song;
@@ -32,6 +34,7 @@ interface SongViewerProps {
   sheet: SongSheet;
   onSheetChange: (sheet: SongSheet) => void;
   showChords: boolean;
+  fontSize: string;
 }
 
 const DEBOUNCE_TIME = 200;
@@ -112,10 +115,12 @@ export default function SongViewer({
   sheet,
   onSheetChange,
   showChords,
+  fontSize,
 }: SongViewerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isUpdatingByListener = useRef(false);
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const isMobile = useIsMobile();
 
   // State for mobile chord editor
   const [activeInput, setActiveInput] = useState<{
@@ -401,7 +406,7 @@ export default function SongViewer({
                                   .selectionStart ?? 0
                               )
                             }
-                            inputMode="text"
+                            inputMode={isMobile ? 'none' : 'text'}
                             className="font-code text-primary font-bold bg-muted/50 border-primary/20 h-8"
                             placeholder="Akkorde..."
                           />
@@ -458,7 +463,7 @@ export default function SongViewer({
             {part.lines.map((line, lineIndex) => (
               <div
                 key={lineIndex}
-                className="flex flex-col mb-1 font-code text-sm sm:text-base"
+                className={cn('flex flex-col mb-1 font-code', fontSize)}
               >
                 {showChords && line.chords && (
                   <div className="text-primary font-bold whitespace-pre-wrap">

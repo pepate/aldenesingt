@@ -12,6 +12,8 @@ import {
   X,
   Plus,
   Minus,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { cloneDeep } from 'lodash';
 
@@ -25,6 +27,9 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { UserNav } from '@/components/user-nav';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+
+const FONT_SIZES = ['text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl'];
 
 function SongPageContent() {
   const params = useParams();
@@ -40,6 +45,14 @@ function SongPageContent() {
   const [editedSheet, setEditedSheet] = useState<SongSheet | null>(null);
   const [transpose, setTranspose] = useState(0);
   const [showChords, setShowChords] = useState(true);
+  const [fontSizeIndex, setFontSizeIndex] = useState(2); // default to 'text-lg'
+
+  useEffect(() => {
+    const savedSizeIndex = localStorage.getItem('song-viewer-font-size-index');
+    if (savedSizeIndex) {
+      setFontSizeIndex(Number(savedSizeIndex));
+    }
+  }, []);
 
   const songRef = useMemoFirebase(
     () => (firestore ? doc(firestore, 'songs', songId) : null),
@@ -109,6 +122,15 @@ function SongPageContent() {
 
   const handleTranspose = (amount: number) => {
     setTranspose((prev) => prev + amount);
+  };
+
+  const handleFontSizeChange = (amount: number) => {
+    const newIndex = Math.max(
+      0,
+      Math.min(FONT_SIZES.length - 1, fontSizeIndex + amount)
+    );
+    setFontSizeIndex(newIndex);
+    localStorage.setItem('song-viewer-font-size-index', String(newIndex));
   };
 
   if (songLoading || !song || !editedSheet) {
@@ -200,6 +222,30 @@ function SongPageContent() {
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
+
+                  <Separator orientation="vertical" className="h-5 mx-1" />
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleFontSizeChange(-1)}
+                    disabled={isEditing}
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <span className="font-mono text-sm font-semibold w-8 text-center">
+                    Aa
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleFontSizeChange(1)}
+                    disabled={isEditing}
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
                 </div>
               </>
             )}
@@ -221,6 +267,7 @@ function SongPageContent() {
             sheet={editedSheet}
             onSheetChange={setEditedSheet}
             showChords={showChords}
+            fontSize={FONT_SIZES[fontSizeIndex]}
           />
         )}
       </main>
