@@ -101,8 +101,8 @@ service cloud.firestore {
       allow create: if isCreatorOrAdmin() && request.resource.data.hostId == request.auth.uid;
       // Only the host can update the session (scroll, transpose, song change)
       allow update: if isSignedIn() && isHost(sessionId);
-      // Only the host can delete the session
-      allow delete: if isSignedIn() && isHost(sessionId);
+      // Only the host or an admin can delete the session
+      allow delete: if isSignedIn() && (isHost(sessionId) || isAdmin());
 
       /**
        * @description Manages participants within a session.
