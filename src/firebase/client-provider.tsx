@@ -8,7 +8,14 @@ import React, {
 } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Auth, getAuth, onAuthStateChanged, User } from 'firebase/auth';
-import { Firestore, getFirestore } from 'firebase/firestore';
+import {
+  Firestore,
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
 import { initializeFirebase } from '.';
 import { FirebaseProvider } from './provider';
 
@@ -41,7 +48,29 @@ export function FirebaseClientProvider({
 
     const unsubscribe = onAuthStateChanged(
       auth,
-      (user) => {
+      async (user) => {
+        if (user && firestore) {
+          const userRef = doc(firestore, 'users', user.uid);
+          const userDoc = await getDoc(userRef);
+
+          if (!userDoc.exists()) {
+            // If the user profile doesn't exist, create it.
+            try {
+              await setDoc(userRef, {
+                id: user.uid,
+                email: user.email,
+                displayName: user.displayName,
+                photoURL: user.photoURL,
+                createdAt: serverTimestamp(),
+                role: 'user', // Default role for all new users
+                songsGeneratedToday: 0,
+                lastGenerationDate: '',
+              });
+            } catch (error) {
+              console.error("Failed to create user profile:", error);
+            }
+          }
+        }
         setUser(user);
         setLoading(false);
       },

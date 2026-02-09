@@ -28,6 +28,7 @@ import {
   useCollection,
   useFirebase,
   useMemoFirebase,
+  useDoc,
 } from '@/firebase';
 import {
   collection,
@@ -36,8 +37,9 @@ import {
   deleteDoc,
   doc,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore';
-import type { Song } from '@/lib/types';
+import type { Song, UserProfile } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,7 +65,13 @@ function LibraryPage() {
   const [artist, setArtist] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // This query fetches songs for everyone.
+  const userProfileRef = useMemoFirebase(
+    () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
+    [firestore, user]
+  );
+  const { data: userProfile, loading: userProfileLoading } =
+    useDoc<UserProfile>(userProfileRef);
+
   const songsRef = useMemoFirebase(
     () => (firestore ? collection(firestore, 'songs') : null),
     [firestore]
@@ -77,7 +85,14 @@ function LibraryPage() {
 
   const handleGenerateSong = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!songTitle || !artist || !user || !firestore) {
+    if (
+      !songTitle ||
+      !artist ||
+      !user ||
+      !firestore ||
+      !userProfileRef ||
+      !userProfile
+    ) {
       toast({
         variant: 'destructive',
         title: 'Fehlende Informationen',
@@ -86,16 +101,45 @@ function LibraryPage() {
       return;
     }
 
+    if (userProfile.role !== 'creator' && userProfile.role !== 'admin') {
+      toast({
+        variant: 'destructive',
+        title: 'Keine Berechtigung',
+        description: 'Sie haben nicht die nötige Berechtigung, um Songs zu generieren.',
+      });
+      return;
+    }
+
+    // Daily limit check for creators
+    if (userProfile.role === 'creator') {
+      const today = new Date().toISOString().split('T')[0];
+      const songsToday =
+        userProfile.lastGenerationDate === today
+          ? userProfile.songsGeneratedToday
+          : 0;
+
+      if (songsToday >= 5) {
+        toast({
+          variant: 'destructive',
+          title: 'Tageslimit erreicht',
+          description:
+            'Sie haben Ihr Limit von 5 generierten Songs für heute erreicht.',
+        });
+        return;
+      }
+    }
+
     setIsGenerating(true);
     try {
-      // 1. Call Genkit flow to generate structured data
-      const { songtitle, artist: songArtist, sheet } = await generateSongSheet({ title: songTitle, artist });
+      const { songtitle, artist: songArtist, sheet } = await generateSongSheet({
+        title: songTitle,
+        artist,
+      });
 
       if (!sheet || !sheet.song) {
         throw new Error('Die KI konnte kein gültiges Song-Sheet erstellen.');
       }
 
-      // 2. Save structured content to Firestore
       const songsCollectionRef = collection(firestore, 'songs');
       await addDoc(songsCollectionRef, {
         userId: user.uid,
@@ -104,6 +148,19 @@ function LibraryPage() {
         sheet: sheet,
         createdAt: serverTimestamp(),
       });
+
+      // Update generation count for creators
+      if (userProfile.role === 'creator') {
+        const today = new Date().toISOString().split('T')[0];
+        const newCount =
+          userProfile.lastGenerationDate === today
+            ? userProfile.songsGeneratedToday + 1
+            : 1;
+        await updateDoc(userProfileRef, {
+          songsGeneratedToday: newCount,
+          lastGenerationDate: today,
+        });
+      }
 
       toast({
         title: 'Song-Sheet generiert & gespeichert',
@@ -117,8 +174,7 @@ function LibraryPage() {
         variant: 'destructive',
         title: 'Generierung fehlgeschlagen',
         description:
-          error.message ||
-          'Das Song-Sheet konnte nicht generiert werden.',
+          error.message || 'Das Song-Sheet konnte nicht generiert werden.',
       });
     } finally {
       setIsGenerating(false);
@@ -128,7 +184,6 @@ function LibraryPage() {
   const handleDelete = async (songToDelete: Song) => {
     if (!firestore || !user || user.uid !== songToDelete.userId) return;
     try {
-      // Delete the document from Firestore
       const docRef = doc(firestore, 'songs', songToDelete.id);
       await deleteDoc(docRef);
 
@@ -172,7 +227,7 @@ function LibraryPage() {
     }
   };
 
-  if (userLoading) {
+  if (userLoading || userProfileLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
@@ -186,8 +241,7 @@ function LibraryPage() {
         <LibraryIcon className="h-16 w-16 text-primary mb-4" />
         <h2 className="text-2xl font-bold">Bitte anmelden</h2>
         <p className="text-muted-foreground mt-2 mb-6">
-          Sie müssen angemeldet sein, um die Bibliothek zu sehen und Songs zu
-          generieren.
+          Sie müssen angemeldet sein, um die Bibliothek zu sehen.
         </p>
         <Button onClick={() => router.push('/auth')}>
           <LogIn className="mr-2" />
@@ -196,6 +250,9 @@ function LibraryPage() {
       </div>
     );
   }
+
+  const canGenerate =
+    userProfile?.role === 'creator' || userProfile?.role === 'admin';
 
   return (
     <div className="min-h-screen bg-background">
@@ -211,60 +268,64 @@ function LibraryPage() {
       </header>
 
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PlusCircle />
-              Neuen Song generieren
-            </CardTitle>
-            <CardDescription>
-              Geben Sie einen Songtitel und Künstler an. Unsere KI generiert
-              automatisch ein Song-Sheet mit Text und Akkorden.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleGenerateSong} className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="song-title">Songtitel</Label>
-                  <Input
-                    id="song-title"
-                    placeholder="z.B. Über den Wolken"
-                    value={songTitle}
-                    onChange={(e) => setSongTitle(e.target.value)}
-                    required
-                  />
+        {canGenerate && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PlusCircle />
+                Neuen Song generieren
+              </CardTitle>
+              <CardDescription>
+                Geben Sie einen Songtitel und Künstler an. Unsere KI generiert
+                automatisch ein Song-Sheet mit Text und Akkorden.
+                 {userProfile?.role === 'creator' &&
+                  ` (${5 - ((userProfile.lastGenerationDate === new Date().toISOString().split('T')[0]) ? userProfile.songsGeneratedToday : 0)}/5 heute übrig)`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleGenerateSong} className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="song-title">Songtitel</Label>
+                    <Input
+                      id="song-title"
+                      placeholder="z.B. Über den Wolken"
+                      value={songTitle}
+                      onChange={(e) => setSongTitle(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="artist">Künstler</Label>
+                    <Input
+                      id="artist"
+                      placeholder="z.B. Reinhard Mey"
+                      value={artist}
+                      onChange={(e) => setArtist(e.target.value)}
+                      required
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="artist">Künstler</Label>
-                  <Input
-                    id="artist"
-                    placeholder="z.B. Reinhard Mey"
-                    value={artist}
-                    onChange={(e) => setArtist(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <Button
-                type="submit"
-                disabled={isGenerating || !songTitle || !artist}
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Wird generiert...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="mr-2" />
-                    Song-Sheet generieren
-                  </>
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                <Button
+                  type="submit"
+                  disabled={isGenerating || !songTitle || !artist}
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Wird generiert...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2" />
+                      Song-Sheet generieren
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
         <div>
           <h2 className="text-2xl font-bold mb-4">Alle Songs</h2>
@@ -311,32 +372,36 @@ function LibraryPage() {
                     <Share2 className="mr-2 h-4 w-4" />
                     Session starten
                   </Button>
-                  {user && user.uid === songItem.userId && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="icon">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Diese Aktion kann nicht rückgängig gemacht werden.
-                            Dadurch wird das Song-Sheet dauerhaft gelöscht.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDelete(songItem)}
-                          >
-                            Löschen
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
+                  {(user && user.uid === songItem.userId) ||
+                    (userProfile?.role === 'admin' && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="icon">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Sind Sie sicher?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Diese Aktion kann nicht rückgängig gemacht
+                              werden. Dadurch wird das Song-Sheet dauerhaft
+                              gelöscht.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(songItem)}
+                            >
+                              Löschen
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    ))}
                 </CardFooter>
               </Card>
             ))}

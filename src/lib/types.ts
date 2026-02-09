@@ -41,3 +41,14 @@ export type SessionParticipant = {
   displayName: string | null;
   photoURL: string | null;
 };
+
+export type UserProfile = {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  createdAt: any;
+  role: 'admin' | 'creator' | 'user';
+  songsGeneratedToday: number;
+  lastGenerationDate: string; // YYYY-MM-DD
+};

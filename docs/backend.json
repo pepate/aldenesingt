@@ -2,7 +2,7 @@
   "entities": {
     "UserProfile": {
       "title": "User Profile",
-      "description": "Represents a user's profile information.",
+      "description": "Represents a user's profile information, including their role and usage limits.",
       "type": "object",
       "properties": {
         "id": {
@@ -27,9 +27,23 @@
           "type": "string",
           "format": "date-time",
           "description": "The timestamp when the user profile was created."
+        },
+        "role": {
+          "type": "string",
+          "description": "The user's role in the application.",
+          "enum": ["admin", "creator", "user"]
+        },
+        "songsGeneratedToday": {
+          "type": "number",
+          "description": "The number of songs the user has generated today."
+        },
+        "lastGenerationDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date (YYYY-MM-DD) of the last song generation."
         }
       },
-      "required": ["id", "email"]
+      "required": ["id", "email", "role"]
     },
     "Song": {
       "title": "Song",
