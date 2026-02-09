@@ -11,6 +11,7 @@ import {
   Share2,
   Library as LibraryIcon,
   Sparkles,
+  Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -658,6 +659,14 @@ function LibraryPage() {
                           : '-'}
                       </TableCell>
                       <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Bearbeiten"
+                          onClick={() => router.push(`/library/${songItem.id}`)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         {(user?.uid === songItem.userId ||
                           userProfile?.role === 'admin' ||
                           userProfile?.role === 'superadmin') && (

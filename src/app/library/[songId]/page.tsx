@@ -1,0 +1,231 @@
+'use client';
+
+import { useEffect, useState, Suspense } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import {
+  ArrowLeft,
+  Loader2,
+  Music,
+  Pencil,
+  Save,
+  X,
+  Plus,
+  Minus,
+} from 'lucide-react';
+import { cloneDeep } from 'lodash';
+
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import SongViewer from '@/components/song-viewer';
+import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { useDoc, useFirebase, useMemoFirebase } from '@/firebase';
+import type { Song, SongSheet } from '@/lib/types';
+import { doc, updateDoc } from 'firebase/firestore';
+import { UserNav } from '@/components/user-nav';
+
+function SongPageContent() {
+  const params = useParams();
+  const router = useRouter();
+  const { toast } = useToast();
+  const { firestore } = useFirebase();
+
+  const songId = Array.isArray(params.songId)
+    ? params.songId[0]
+    : params.songId;
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedSheet, setEditedSheet] = useState<SongSheet | null>(null);
+  const [transpose, setTranspose] = useState(0);
+
+  const songRef = useMemoFirebase(
+    () => (firestore ? doc(firestore, 'songs', songId) : null),
+    [firestore, songId]
+  );
+  const {
+    data: song,
+    loading: songLoading,
+    error: songError,
+  } = useDoc<Song>(songRef);
+
+  useEffect(() => {
+    if (songError) {
+      toast({
+        variant: 'destructive',
+        title: 'Fehler beim Laden des Songs',
+        description: 'Auf diesen Song konnte nicht zugegriffen werden.',
+      });
+      router.push('/library');
+    }
+  }, [songError, router, toast]);
+
+  useEffect(() => {
+    if (!songLoading && !song) {
+      toast({
+        variant: 'destructive',
+        title: 'Song nicht gefunden',
+        description: 'Der angeforderte Song existiert nicht.',
+      });
+      router.push('/library');
+    }
+  }, [songLoading, song, router, toast]);
+
+  // When song data loads, initialize the editedSheet state
+  useEffect(() => {
+    if (song?.sheet) {
+      setEditedSheet(cloneDeep(song.sheet));
+    }
+  }, [song]);
+
+  const handleSaveEdits = async () => {
+    if (!songRef || !editedSheet) return;
+    try {
+      await updateDoc(songRef, { sheet: editedSheet });
+      toast({
+        title: 'Gespeichert',
+        description: 'Änderungen am Song-Sheet wurden gespeichert.',
+      });
+      setIsEditing(false);
+    } catch (error: any) {
+      console.error('Failed to save song sheet:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Speichern fehlgeschlagen',
+        description:
+          error.message || 'Die Änderungen konnten nicht gespeichert werden.',
+      });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    if (song?.sheet) {
+      setEditedSheet(cloneDeep(song.sheet));
+    }
+    setIsEditing(false);
+  };
+
+  const handleTranspose = (amount: number) => {
+    setTranspose((prev) => prev + amount);
+  };
+
+  if (songLoading || !song || !editedSheet) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Song wird geladen...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-screen bg-background">
+      <header className="flex items-center justify-between p-3 border-b shrink-0">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" asChild>
+            <Link href="/library">
+              <ArrowLeft />
+              <span className="sr-only">Zurück zur Bibliothek</span>
+            </Link>
+          </Button>
+          <div className="flex items-center gap-2">
+            <Music className="h-6 w-6 text-primary" />
+            <span className="font-semibold text-lg">
+              {song?.title || 'Song-Ansicht'}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1">
+            {isEditing ? (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={handleCancelEdit}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  className="h-8 w-8 bg-green-600 hover:bg-green-700"
+                  onClick={handleSaveEdits}
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setIsEditing(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleTranspose(-1)}
+                    disabled={isEditing}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <span className="font-mono text-sm font-semibold w-8 text-center">
+                    {transpose > 0 ? `+${transpose}` : transpose}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleTranspose(1)}
+                    disabled={isEditing}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+          <UserNav />
+        </div>
+      </header>
+      <main className="flex-1 overflow-hidden">
+        {song && editedSheet && (
+          <SongViewer
+            key={song.id}
+            song={song}
+            sessionId={song.id} // Not a real session, but needed for key
+            isHost={true} // To enable host controls
+            sessionRef={null} // No session to sync with
+            initialScroll={0}
+            transpose={transpose}
+            isEditing={isEditing}
+            sheet={editedSheet}
+            onSheetChange={setEditedSheet}
+          />
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default function SongPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center h-screen">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="mt-4 text-muted-foreground">Wird geladen...</p>
+        </div>
+      }
+    >
+      <FirebaseClientProvider>
+        <SongPageContent />
+      </FirebaseClientProvider>
+    </Suspense>
+  );
+}
