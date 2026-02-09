@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Music, Users, LogIn, Library, Upload, ArrowRight } from 'lucide-react';
+import { Music, Users, LogIn, Library, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -15,18 +15,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useUser } from '@/firebase';
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-  getFirestore,
-} from 'firebase/firestore';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { UserNav } from '@/components/user-nav';
 
 function HomeComponent() {
   const router = useRouter();
   const { toast } = useToast();
-  const { user, loading: userLoading } = useUser();
+  const { user } = useUser();
   const [sessionId, setSessionId] = useState<string>('');
   const [isJoining, setIsJoining] = useState<boolean>(false);
 
@@ -56,10 +51,7 @@ function HomeComponent() {
         </div>
         <div>
           {user ? (
-            <Button variant="ghost" onClick={handleNavigateToLibrary}>
-              <Library className="mr-2" />
-              Meine Bibliothek
-            </Button>
+            <UserNav />
           ) : (
             <Button variant="ghost" onClick={() => router.push('/auth')}>
               <LogIn className="mr-2" />

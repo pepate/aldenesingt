@@ -8,7 +8,6 @@ import {
   PlusCircle,
   LogIn,
   Loader2,
-  ArrowLeft,
   Share2,
   Library as LibraryIcon,
 } from 'lucide-react';
@@ -51,6 +50,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { UserNav } from '@/components/user-nav';
 
 function LibraryPage() {
   const { user, loading: userLoading } = useUser();
@@ -220,130 +220,136 @@ function LibraryPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-      <Button variant="ghost" onClick={() => router.push('/')} className="mb-4">
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Zurück zur Startseite
-      </Button>
-      <h1 className="text-4xl font-bold mb-8 flex items-center gap-3">
-        <LibraryIcon className="h-10 w-10 text-primary" />
-        Meine Dokumenten-Bibliothek
-      </h1>
+    <div className="min-h-screen bg-background">
+      <header className="p-4 sm:p-6 flex justify-between items-center border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
+        <div
+          className="flex items-center gap-3 cursor-pointer"
+          onClick={() => router.push('/')}
+        >
+          <LibraryIcon className="h-8 w-8 text-primary" />
+          <h1 className="text-3xl font-bold text-foreground">Bibliothek</h1>
+        </div>
+        <UserNav />
+      </header>
 
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <PlusCircle />
-            Neues Dokument hochladen
-          </CardTitle>
-          <CardDescription>
-            Laden Sie eine neue PDF-Datei in Ihre Bibliothek hoch.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Input
-            type="file"
-            accept="application/pdf"
-            onChange={handleFileChange}
-            className="file:text-primary file:font-semibold"
-          />
-          <Input
-            placeholder="Titel des Dokuments"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            disabled={!file}
-          />
-          <Button
-            onClick={handleUpload}
-            disabled={isUploading || !file || !title}
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Wird hochgeladen...
-              </>
-            ) : (
-              <>
-                <Upload className="mr-2" />
-                Hochladen
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+      <main className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <PlusCircle />
+              Neues Dokument hochladen
+            </CardTitle>
+            <CardDescription>
+              Laden Sie eine neue PDF-Datei in Ihre Bibliothek hoch.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input
+              type="file"
+              accept="application/pdf"
+              onChange={handleFileChange}
+              className="file:text-primary file:font-semibold"
+            />
+            <Input
+              placeholder="Titel des Dokuments"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={!file}
+            />
+            <Button
+              onClick={handleUpload}
+              disabled={isUploading || !file || !title}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Wird hochgeladen...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2" />
+                  Hochladen
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
 
-      <div>
-        <h2 className="text-2xl font-bold mb-4">Ihre Dokumente</h2>
-        {docsLoading && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => (
-              <Card key={i} className="h-40 flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <div>
+          <h2 className="text-2xl font-bold mb-4">Ihre Dokumente</h2>
+          {docsLoading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <Card key={i} className="h-40 flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </Card>
+              ))}
+            </div>
+          )}
+          {error && (
+            <p className="text-destructive">
+              Fehler beim Laden der Dokumente: {error.message}
+            </p>
+          )}
+          {!docsLoading && documents && documents.length === 0 && (
+            <p className="text-muted-foreground mt-4">
+              Sie haben noch keine Dokumente hochgeladen.
+            </p>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {documents?.map((docItem) => (
+              <Card key={docItem.id} className="flex flex-col">
+                <CardHeader>
+                  <CardTitle className="truncate">{docItem.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex-grow flex items-center justify-center">
+                  <a
+                    href={docItem.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <BookOpen className="h-16 w-16 text-muted-foreground hover:text-primary transition-colors" />
+                  </a>
+                </CardContent>
+                <CardContent className="flex justify-between items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={() => createSession(docItem.id)}
+                  >
+                    <Share2 className="mr-2 h-4 w-4" />
+                    Session starten
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="icon">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Diese Aktion kann nicht rückgängig gemacht werden.
+                          Dadurch wird das Dokument dauerhaft gelöscht.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDelete(docItem)}
+                        >
+                          Löschen
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </CardContent>
               </Card>
             ))}
           </div>
-        )}
-        {error && (
-          <p className="text-destructive">
-            Fehler beim Laden der Dokumente: {error.message}
-          </p>
-        )}
-        {!docsLoading && documents && documents.length === 0 && (
-          <p className="text-muted-foreground mt-4">
-            Sie haben noch keine Dokumente hochgeladen.
-          </p>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {documents?.map((docItem) => (
-            <Card key={docItem.id} className="flex flex-col">
-              <CardHeader>
-                <CardTitle className="truncate">{docItem.title}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-grow flex items-center justify-center">
-                <a
-                  href={docItem.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <BookOpen className="h-16 w-16 text-muted-foreground hover:text-primary transition-colors" />
-                </a>
-              </CardContent>
-              <CardContent className="flex justify-between items-center gap-2">
-                <Button
-                  size="sm"
-                  className="w-full"
-                  onClick={() => createSession(docItem.id)}
-                >
-                  <Share2 className="mr-2 h-4 w-4" />
-                  Session starten
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="icon">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Diese Aktion kann nicht rückgängig gemacht werden.
-                        Dadurch wird das Dokument dauerhaft gelöscht.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDelete(docItem)}>
-                        Löschen
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </CardContent>
-            </Card>
-          ))}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

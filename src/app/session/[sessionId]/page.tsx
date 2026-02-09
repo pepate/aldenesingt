@@ -11,7 +11,6 @@ import {
   Crown,
   Loader2,
   AlertTriangle,
-  Library,
   Users,
 } from 'lucide-react';
 
@@ -47,7 +46,9 @@ import {
   setDoc,
   deleteDoc,
   serverTimestamp,
+  onSnapshot,
 } from 'firebase/firestore';
+import { UserNav } from '@/components/user-nav';
 
 function SessionPageContent() {
   const params = useParams();
@@ -253,15 +254,6 @@ function SessionPageContent() {
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push('/library')}
-          >
-            <Library className="mr-2 h-4 w-4" />
-            Bibliothek
-          </Button>
-
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon" className="relative">
@@ -337,6 +329,7 @@ function SessionPageContent() {
               <span className="sr-only">Sitzungs-ID kopieren</span>
             </Button>
           </div>
+          <UserNav />
         </div>
       </header>
       <main className="flex-1 overflow-hidden">
