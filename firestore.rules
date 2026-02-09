@@ -10,7 +10,6 @@
  *
  * Data Structure:
  * - /users/{userId}: Private user profile data. Access is restricted to the owner.
- * - /users/{userId}/pdf_documents/{pdfDocumentId}: A user's private collection of documents. This is structurally segregated from the public library to ensure privacy.
  * - /pdf_documents/{pdfDocumentId}: A top-level collection for all publicly-readable documents. This allows for efficient, unauthenticated browsing.
  * - /sessions/{sessionId}: Contains data for a single collaborative session, controlled by the 'hostId'.
  * - /sessions/{sessionId}/sessionParticipants/{sessionParticipantId}: A subcollection tracking users who have joined a session.
@@ -27,8 +26,6 @@
  * - `PdfDocument` and `Session` documents contain `userId` and `hostId` fields respectively. This allows rules to check ownership without expensive `get()` calls to other documents.
  * - `sessionParticipants` rules use one `get()` call to the parent `session` document to verify the host, which is an efficient and necessary pattern for subcollection security.
  *
- * Structural Segregation:
- * Private user documents (`/users/{userId}/pdf_documents`) are stored in a separate collection from public documents (`/pdf_documents`). This is more secure and performant than using a single collection with a boolean `isPublic` flag, especially for list queries.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -95,17 +92,6 @@ service cloud.firestore {
       allow create: if isOwner(userId) && request.resource.data.id == userId;
       allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
       allow delete: if isExistingOwner(userId);
-
-      /**
-       * @description Manages a user's private PDF documents.
-       * @path /users/{userId}/pdf_documents/{pdfDocumentId}
-       * @allow (create) The owner creating a new private document under their own path.
-       * @deny (get) Any user trying to access another user's private documents.
-       * @principle Enforces strict document ownership within a user's private data tree.
-       */
-      match /pdf_documents/{pdfDocumentId} {
-        allow read, write: if isOwner(userId);
-      }
     }
 
     /**

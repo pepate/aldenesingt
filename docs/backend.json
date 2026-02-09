@@ -139,12 +139,6 @@
       },
       "description": "Stores public profiles for all users."
     },
-    "/users/{userId}/pdf_documents/{pdfDocumentId}": {
-      "schema": {
-        "$ref": "#/entities/PdfDocument"
-      },
-      "description": "A user's private collection of PDF documents."
-    },
     "/pdf_documents/{pdfDocumentId}": {
       "schema": {
         "$ref": "#/entities/PdfDocument"

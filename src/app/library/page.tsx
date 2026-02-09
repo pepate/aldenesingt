@@ -36,6 +36,7 @@ import {
   serverTimestamp,
   deleteDoc,
   doc,
+  setDoc,
 } from 'firebase/firestore';
 import type { PdfDocument } from '@/lib/types';
 import { v4 as uuidv4 } from 'uuid';
@@ -63,12 +64,10 @@ function LibraryPage() {
   const [isUploading, setIsUploading] = useState(false);
 
   const documentsRef = useMemoFirebase(
-    () =>
-      firestore && user
-        ? collection(firestore, 'users', user.uid, 'pdf_documents')
-        : null,
-    [firestore, user]
+    () => (firestore ? collection(firestore, 'pdf_documents') : null),
+    [firestore]
   );
+
   const {
     data: documents,
     loading: docsLoading,
@@ -111,6 +110,7 @@ function LibraryPage() {
       const downloadURL = await uploadFile(storagePath, file);
 
       await addDoc(documentsRef, {
+        id: docId,
         title,
         url: downloadURL,
         userId: user.uid,
@@ -138,7 +138,7 @@ function LibraryPage() {
   };
 
   const handleDelete = async (docToDelete: PdfDocument) => {
-    if (!firestore || !user) return;
+    if (!firestore || !user || user.uid !== docToDelete.userId) return;
     try {
       // First, delete the file from Storage
       if (docToDelete.storagePath) {
@@ -146,13 +146,7 @@ function LibraryPage() {
       }
 
       // Then, delete the document from Firestore
-      const docRef = doc(
-        firestore,
-        'users',
-        user.uid,
-        'pdf_documents',
-        docToDelete.id
-      );
+      const docRef = doc(firestore, 'pdf_documents', docToDelete.id);
       await deleteDoc(docRef);
 
       toast({
@@ -209,7 +203,7 @@ function LibraryPage() {
         <LibraryIcon className="h-16 w-16 text-primary mb-4" />
         <h2 className="text-2xl font-bold">Bitte anmelden</h2>
         <p className="text-muted-foreground mt-2 mb-6">
-          Sie müssen angemeldet sein, um Ihre Bibliothek zu sehen.
+          Sie müssen angemeldet sein, um die Bibliothek zu sehen und Dokumente hochzuladen.
         </p>
         <Button onClick={() => router.push('/auth')}>
           <LogIn className="mr-2" />
@@ -240,7 +234,7 @@ function LibraryPage() {
               Neues Dokument hochladen
             </CardTitle>
             <CardDescription>
-              Laden Sie eine neue PDF-Datei in Ihre Bibliothek hoch.
+              Laden Sie eine neue PDF-Datei in die gemeinsame Bibliothek hoch.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -276,7 +270,7 @@ function LibraryPage() {
         </Card>
 
         <div>
-          <h2 className="text-2xl font-bold mb-4">Ihre Dokumente</h2>
+          <h2 className="text-2xl font-bold mb-4">Alle Dokumente</h2>
           {docsLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(3)].map((_, i) => (
@@ -293,7 +287,7 @@ function LibraryPage() {
           )}
           {!docsLoading && documents && documents.length === 0 && (
             <p className="text-muted-foreground mt-4">
-              Sie haben noch keine Dokumente hochgeladen.
+              Es wurden noch keine Dokumente hochgeladen.
             </p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -320,30 +314,32 @@ function LibraryPage() {
                     <Share2 className="mr-2 h-4 w-4" />
                     Session starten
                   </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="icon">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Diese Aktion kann nicht rückgängig gemacht werden.
-                          Dadurch wird das Dokument dauerhaft gelöscht.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDelete(docItem)}
-                        >
-                          Löschen
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  {user && user.uid === docItem.userId && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="icon">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Diese Aktion kann nicht rückgängig gemacht werden.
+                            Dadurch wird das Dokument dauerhaft gelöscht.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDelete(docItem)}
+                          >
+                            Löschen
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </CardContent>
               </Card>
             ))}

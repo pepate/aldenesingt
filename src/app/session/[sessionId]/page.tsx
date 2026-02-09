@@ -46,7 +46,6 @@ import {
   setDoc,
   deleteDoc,
   serverTimestamp,
-  onSnapshot,
 } from 'firebase/firestore';
 import { UserNav } from '@/components/user-nav';
 
@@ -83,23 +82,25 @@ function SessionPageContent() {
 
   const isHost = session?.hostId === user?.uid;
 
-  const pdfDocumentsRef = useMemoFirebase(
-    () =>
-      firestore && user
-        ? collection(firestore, 'users', user.uid, 'pdf_documents')
-        : null,
-    [firestore, user]
+  // Global documents for the host's dropdown
+  const allDocumentsRef = useMemoFirebase(
+    () => (firestore ? collection(firestore, 'pdf_documents') : null),
+    [firestore]
   );
-  const { data: userDocuments, loading: docsLoading } =
-    useCollection<PdfDocument>(pdfDocumentsRef);
+  const { data: allDocuments, loading: docsLoading } =
+    useCollection<PdfDocument>(allDocumentsRef);
+  
+  // Current document for the session
+  const currentDocumentRef = useMemoFirebase(
+    () => (firestore && session?.songId ? doc(firestore, 'pdf_documents', session.songId) : null),
+    [firestore, session?.songId]
+  );
+  const {data: currentDocument, loading: currentDocLoading} = useDoc<PdfDocument>(currentDocumentRef);
 
-  const [currentDocument, setCurrentDocument] = useState<PdfDocument | null>(
-    null
-  );
 
   // Effect to handle session errors
   useEffect(() => {
-    if (sessionError) {
+    if (!sessionLoading && !session) {
       toast({
         variant: 'destructive',
         title: 'Fehler',
@@ -108,37 +109,7 @@ function SessionPageContent() {
       });
       router.push('/');
     }
-  }, [sessionError, router, toast]);
-
-  // Effect to find the current document details when session or user documents change
-  useEffect(() => {
-    // This effect is complex because the document URL is in a different collection
-    // than the session document. We need to fetch the document details separately.
-    if (session && session.songId && firestore) {
-      // Find the owner of the document, which might be the host or another user
-      // For this simple app, we assume the host owns all the docs in a session.
-      // A more complex app might need to search all users' documents.
-      if (session.hostId) {
-        const docRef = doc(
-          firestore,
-          'users',
-          session.hostId,
-          'pdf_documents',
-          session.songId
-        );
-        const unsub = onSnapshot(docRef, (docSnap) => {
-          if (docSnap.exists()) {
-            setCurrentDocument({ id: docSnap.id, ...docSnap.data() } as PdfDocument);
-          } else {
-            // Handle case where document might not be found or is in another collection
-             setCurrentDocument(null);
-          }
-        });
-        return () => unsub();
-      }
-    }
-  }, [session, firestore]);
-
+  }, [session, sessionLoading, router, toast]);
 
   // Effect to join/leave session
   useEffect(() => {
@@ -170,7 +141,7 @@ function SessionPageContent() {
 
     try {
       await updateDoc(sessionRef, { songId: newSongId, scroll: 0 });
-      const newDoc = userDocuments?.find((d) => d.id === newSongId);
+      const newDoc = allDocuments?.find((d) => d.id === newSongId);
       toast({
         title: 'Dokument gewechselt',
         description: `Neues Dokument: ${newDoc?.title}`,
@@ -194,7 +165,7 @@ function SessionPageContent() {
     }
   };
 
-  if (sessionLoading || docsLoading || participantsLoading) {
+  if (sessionLoading || docsLoading || participantsLoading || currentDocLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -220,9 +191,9 @@ function SessionPageContent() {
       <header className="flex items-center justify-between p-3 border-b shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" asChild>
-            <Link href="/">
+            <Link href="/library">
               <ArrowLeft />
-              <span className="sr-only">Zurück zur Startseite</span>
+              <span className="sr-only">Zurück zur Bibliothek</span>
             </Link>
           </Button>
           <div className="flex items-center gap-2">
@@ -232,13 +203,13 @@ function SessionPageContent() {
                 <Select
                   onValueChange={handleSongChange}
                   value={session.songId}
-                  disabled={!userDocuments || userDocuments.length === 0}
+                  disabled={!allDocuments || allDocuments.length === 0}
                 >
                   <SelectTrigger className="w-auto md:w-[300px] font-semibold text-lg">
                     <SelectValue placeholder="Wähle ein Dokument..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {userDocuments?.map((doc) => (
+                    {allDocuments?.map((doc) => (
                       <SelectItem key={doc.id} value={doc.id}>
                         {doc.title}
                       </SelectItem>
