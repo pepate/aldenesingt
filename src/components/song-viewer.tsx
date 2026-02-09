@@ -151,17 +151,24 @@ export default function SongViewer({
     value: string
   ) => {
     const newSheet = cloneDeep(sheet);
-    newSheet.song[partIndex].lines[lineIndex].chords = value;
-    onSheetChange(newSheet);
-  };
 
-  const handleLyricChange = (
-    partIndex: number,
-    lineIndex: number,
-    value: string
-  ) => {
-    const newSheet = cloneDeep(sheet);
-    newSheet.song[partIndex].lines[lineIndex].text = value;
+    // Get the base name of the part being edited (e.g., "Verse" from "Verse 1")
+    const editedPart = newSheet.song[partIndex];
+    if (!editedPart) return;
+    
+    const basePartName = editedPart.part.split(' ')[0];
+
+    // Apply the change to all similar parts
+    newSheet.song.forEach((part) => {
+      // Check if it's the same type of part (e.g., another "Verse")
+      if (part.part.startsWith(basePartName)) {
+        // Check if the target line exists to avoid errors
+        if (part.lines.length > lineIndex) {
+          part.lines[lineIndex].chords = value;
+        }
+      }
+    });
+
     onSheetChange(newSheet);
   };
 
@@ -226,11 +233,8 @@ export default function SongViewer({
                   <Input
                     type="text"
                     value={line.text}
-                    onChange={(e) =>
-                      handleLyricChange(partIndex, lineIndex, e.target.value)
-                    }
+                    disabled
                     className="font-code bg-muted/50 h-8"
-                    placeholder="Songtext..."
                   />
                 ) : (
                   <div className="whitespace-pre-wrap">{line.text}</div>
