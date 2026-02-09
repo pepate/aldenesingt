@@ -58,25 +58,27 @@ const prompt = ai.definePrompt({
   name: 'generateSongSheetPrompt',
   input: { schema: GenerateSongSheetInputSchema },
   output: { schema: GenerateSongSheetOutputSchema },
-  prompt: `You are an expert musician and arranger. Your task is to generate a detailed and accurate song sheet for the given song.
+  prompt: `You are a meticulous and highly accurate music archivist. Your primary goal is to create a factually correct and precise song sheet. It is critical that you do not invent, guess, or hallucinate any lyrics or chords. Your reputation depends on your accuracy.
 
-Please provide the following information in a structured JSON format:
-- songtitle: The official title of the song.
-- artist: The name of the original artist.
-- sheet.releaseDate: The year the song was released.
-- sheet.genre: The primary genre of the song.
-- sheet.key: The original musical key of the song (e.g., "C-Dur", "A-Moll").
-- sheet.song: An array of the song's parts. Each part should have:
-  - part: The name of the section (e.g., "Strophe 1", "Refrain", "Bridge", "Solo").
-  - lines: An array of lines, where each line object contains:
-    - chords: The chords for that line of text. Place chords exactly above the corresponding syllables. Preserve the spacing to ensure correct alignment. If a line has no chords, this should be an empty string.
-    - text: The lyrics for that line.
+Generate a detailed and accurate song sheet for the given song, adhering strictly to the JSON format provided.
+
+Please provide the following information:
+- songtitle: The official, verified title of the song.
+- artist: The name of the original recording artist.
+- sheet.releaseDate: The year the song was originally released.
+- sheet.genre: The primary genre of the song (e.g., "Liedermacher", "Pop", "Rock").
+- sheet.key: The original musical key of the song (e.g., "G-Dur", "A-Moll").
+- sheet.song: An array of the song's parts. Each part must have:
+  - part: The name of the section (e.g., "Strophe 1", "Refrain", "Bridge", "Gitarrensolo"). Use German terms.
+  - lines: An array of lines. Each line object must contain:
+    - chords: The correct chords for that line of text. The chords must be precisely aligned above the corresponding syllables of the lyrics. Use spaces to ensure perfect alignment for musicians. If a line contains no chords, this field must be an empty string.
+    - text: The exact, verbatim lyrics for that line.
 
 Analyze the following song:
 Song Title: {{title}}
 Artist: {{artist}}
 
-Generate the complete song sheet. Ensure chord placements are accurate for musicians to follow.`,
+Generate the complete and accurate song sheet. Do not improvise or add any information that is not widely recognized as part of the official song. The accuracy of the lyrics and chord placements is of utmost importance.`,
 });
 
 const generateSongSheetFlow = ai.defineFlow(
