@@ -16,11 +16,22 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import PdfViewer from '@/components/pdf-viewer';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { songs } from '@/lib/songs';
 
 type SessionData = {
+  songId: string;
   songUrl: string;
   title: string;
 };
+
+const SONG_POLL_INTERVAL = 2000; // 2 seconds
 
 function SessionPageContent() {
   const params = useParams();
@@ -46,7 +57,9 @@ function SessionPageContent() {
         const response = await fetch(`/api/session/${sessionId}`);
         if (!response.ok) {
           if (response.status === 404) {
-            throw new Error('Sitzung nicht gefunden. Bitte überprüfe die ID und versuche es erneut.');
+            throw new Error(
+              'Sitzung nicht gefunden. Bitte überprüfe die ID und versuche es erneut.'
+            );
           }
           throw new Error('Laden der Sitzungsdaten fehlgeschlagen.');
         }
@@ -67,6 +80,67 @@ function SessionPageContent() {
 
     fetchSessionData();
   }, [sessionId, router, toast]);
+
+  // Polling for song changes for clients
+  useEffect(() => {
+    if (isHost || !sessionId || !sessionData) return;
+
+    const pollSong = async () => {
+      try {
+        const response = await fetch(`/api/session/${sessionId}`);
+        if (!response.ok) return;
+        const data: SessionData = await response.json();
+
+        if (data.songUrl !== sessionData.songUrl) {
+          setSessionData(data);
+          toast({
+            title: 'Dokument wurde geändert',
+            description: `Das angezeigte Dokument wurde zu "${data.title}" gewechselt.`,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to poll for song change:', err);
+      }
+    };
+
+    const intervalId = setInterval(pollSong, SONG_POLL_INTERVAL);
+    return () => clearInterval(intervalId);
+  }, [isHost, sessionId, sessionData, toast]);
+
+  const handleSongChange = async (newSongId: string) => {
+    if (!sessionId || !isHost) return;
+
+    try {
+      const response = await fetch(`/api/session/${sessionId}/update-song`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ songId: newSongId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update song');
+      }
+
+      const newSong = songs.find((s) => s.id === newSongId);
+      if (newSong) {
+        setSessionData({
+          songId: newSong.id,
+          title: newSong.title,
+          songUrl: newSong.url,
+        });
+        toast({
+          title: 'Dokument gewechselt',
+          description: `Neues Dokument: ${newSong.title}`,
+        });
+      }
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Fehler',
+        description: 'Konnte das Dokument nicht wechseln.',
+      });
+    }
+  };
 
   const copySessionId = () => {
     navigator.clipboard.writeText(sessionId);
@@ -109,9 +183,30 @@ function SessionPageContent() {
           </Button>
           <div className="flex items-center gap-2">
             <Music className="h-6 w-6 text-primary" />
-            <span className="font-semibold text-lg hidden sm:inline">
-              {sessionData?.title || 'SyncScroll'}
-            </span>
+            <div className="hidden sm:block">
+              {!isHost && (
+                <span className="font-semibold text-lg">
+                  {sessionData?.title || 'SyncScroll'}
+                </span>
+              )}
+              {isHost && sessionData && (
+                <Select
+                  onValueChange={handleSongChange}
+                  value={sessionData.songId}
+                >
+                  <SelectTrigger className="w-auto md:w-[300px] font-semibold text-lg">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {songs.map((song) => (
+                      <SelectItem key={song.id} value={song.id}>
+                        {song.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
@@ -129,7 +224,12 @@ function SessionPageContent() {
             <span className="font-mono text-sm font-semibold text-muted-foreground">
               ID: {sessionId}
             </span>
-            <Button variant="ghost" size="icon" onClick={copySessionId} className='h-7 w-7'>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={copySessionId}
+              className="h-7 w-7"
+            >
               <Copy className="h-4 w-4" />
               <span className="sr-only">Sitzungs-ID kopieren</span>
             </Button>

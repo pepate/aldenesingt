@@ -23,7 +23,11 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ songUrl: song.url, title: song.title });
+    return NextResponse.json({
+      songId: song.id,
+      songUrl: song.url,
+      title: song.title,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to fetch session data' },

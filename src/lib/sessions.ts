@@ -32,3 +32,16 @@ export const setScrollPosition = (
 export const getScrollPosition = (sessionId: string): number | undefined => {
   return getSession(sessionId)?.scroll;
 };
+
+export const updateSessionSong = (
+  sessionId: string,
+  songId: string
+): boolean => {
+  const session = getSession(sessionId);
+  if (session) {
+    // Reset scroll on song change
+    sessions.set(sessionId.toUpperCase(), { ...session, songId, scroll: 0 });
+    return true;
+  }
+  return false;
+};
