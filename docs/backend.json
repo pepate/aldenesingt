@@ -54,6 +54,10 @@
           "type": "string",
           "description": "The ID of the user who generated the song."
         },
+        "creatorName": {
+          "type": "string",
+          "description": "The display name of the user who generated the song."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",

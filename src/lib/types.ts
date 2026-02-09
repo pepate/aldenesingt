@@ -18,6 +18,7 @@ export type SongSheet = {
 export type Song = {
   id: string;
   userId: string;
+  creatorName?: string;
   createdAt: any;
   title: string;
   artist: string;

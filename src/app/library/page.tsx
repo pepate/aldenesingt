@@ -67,6 +67,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { format } from 'date-fns';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import { UserNav } from '@/components/user-nav';
 import { generateSongSheet } from '@/ai/flows/generate-song-sheet-flow';
@@ -163,6 +173,7 @@ function LibraryPage() {
       const songsCollectionRef = collection(firestore, 'songs');
       await addDoc(songsCollectionRef, {
         userId: user.uid,
+        creatorName: user.displayName || user.email || 'Anonym',
         title: songtitle,
         artist: songArtist,
         sheet: sheet,
@@ -202,7 +213,12 @@ function LibraryPage() {
   };
 
   const handleDelete = async (songToDelete: Song) => {
-    if (!firestore || !user || (user.uid !== songToDelete.userId && userProfile?.role !== 'admin') ) return;
+    if (
+      !firestore ||
+      !user ||
+      (user.uid !== songToDelete.userId && userProfile?.role !== 'admin')
+    )
+      return;
     try {
       const docRef = doc(firestore, 'songs', songToDelete.id);
       await deleteDoc(docRef);
@@ -247,12 +263,12 @@ function LibraryPage() {
       });
     }
   };
-  
+
   const handleStartSession = async () => {
     if (selectedSongId) {
-        await createSession(selectedSongId);
-        setIsSessionDialogOpen(false);
-        setSelectedSongId(null);
+      await createSession(selectedSongId);
+      setIsSessionDialogOpen(false);
+      setSelectedSongId(null);
     }
   };
 
@@ -300,7 +316,10 @@ function LibraryPage() {
         </div>
         <div className="flex items-center gap-4">
           {canGenerate && (
-             <Dialog open={isSessionDialogOpen} onOpenChange={setIsSessionDialogOpen}>
+            <Dialog
+              open={isSessionDialogOpen}
+              onOpenChange={setIsSessionDialogOpen}
+            >
               <DialogTrigger asChild>
                 <Button>
                   <Share2 className="mr-2 h-4 w-4" /> Session starten
@@ -310,12 +329,13 @@ function LibraryPage() {
                 <DialogHeader>
                   <DialogTitle>Neue Session starten</DialogTitle>
                   <DialogDescription>
-                    Wählen Sie einen Song aus, um eine neue Live-Sitzung zu starten.
+                    Wählen Sie einen Song aus, um eine neue Live-Sitzung zu
+                    starten.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   {songsLoading ? (
-                    <div className='flex justify-center'>
+                    <div className="flex justify-center">
                       <Loader2 className="animate-spin" />
                     </div>
                   ) : (
@@ -334,8 +354,16 @@ function LibraryPage() {
                   )}
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsSessionDialogOpen(false)}>Abbrechen</Button>
-                  <Button onClick={handleStartSession} disabled={!selectedSongId || songsLoading}>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsSessionDialogOpen(false)}
+                  >
+                    Abbrechen
+                  </Button>
+                  <Button
+                    onClick={handleStartSession}
+                    disabled={!selectedSongId || songsLoading}
+                  >
                     Session jetzt starten
                   </Button>
                 </DialogFooter>
@@ -415,12 +443,38 @@ function LibraryPage() {
         <div>
           <h2 className="text-2xl font-bold mb-4">Alle Songs</h2>
           {songsLoading && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[...Array(3)].map((_, i) => (
-                <Card key={i} className="h-48 flex items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </Card>
-              ))}
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[40%]">Song</TableHead>
+                    <TableHead className="w-[25%]">Creator</TableHead>
+                    <TableHead className="w-[20%]">Erstellt am</TableHead>
+                    <TableHead className="text-right w-[15%]">
+                      Aktionen
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...Array(5)].map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Skeleton className="h-5 w-3/4" />
+                        <Skeleton className="h-4 w-1/2 mt-1" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-2/3" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-3/4" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="h-9 w-9 inline-block" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
           {error && (
@@ -429,60 +483,85 @@ function LibraryPage() {
             </p>
           )}
           {!songsLoading && songs && songs.length === 0 && (
-            <p className="text-muted-foreground mt-4">
-              Es wurden noch keine Songs generiert.
-            </p>
+            <div className="text-center py-16 border-2 border-dashed rounded-lg">
+              <Music className="mx-auto h-12 w-12 text-muted-foreground" />
+              <h3 className="mt-4 text-lg font-medium">
+                Keine Songs gefunden
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Generieren Sie Ihren ersten Song, um zu beginnen.
+              </p>
+            </div>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {songs?.map((songItem) => (
-              <Card key={songItem.id} className="flex flex-col">
-                <CardHeader className="flex-row items-start gap-4 space-y-0">
-                  <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-primary/10">
-                    <Music className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <CardTitle className="truncate text-lg">
-                      {songItem.title}
-                    </CardTitle>
-                    <CardDescription>{songItem.artist}</CardDescription>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-grow"></CardContent>
-                <CardFooter className="flex justify-end">
-                  {((user && user.uid === songItem.userId) ||
-                    userProfile?.role === 'admin') && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="icon">
-                          <Trash2 className="h-4 w-4" />
-                           <span className="sr-only">Löschen</span>
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            Sind Sie sicher?
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Diese Aktion kann nicht rückgängig gemacht werden.
-                            Dadurch wird das Song-Sheet dauerhaft gelöscht.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDelete(songItem)}
-                          >
-                            Löschen
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
+          {!songsLoading && songs && songs.length > 0 && (
+            <div className="border rounded-md">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[40%]">Song</TableHead>
+                    <TableHead className="w-[25%]">Creator</TableHead>
+                    <TableHead className="w-[20%]">Erstellt am</TableHead>
+                    <TableHead className="text-right w-[15%]">
+                      Aktionen
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {songs?.map((songItem) => (
+                    <TableRow key={songItem.id}>
+                      <TableCell>
+                        <div className="font-medium">{songItem.title}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {songItem.artist}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {songItem.creatorName || 'Unbekannt'}
+                      </TableCell>
+                      <TableCell>
+                        {songItem.createdAt?.toDate
+                          ? format(songItem.createdAt.toDate(), 'dd.MM.yyyy')
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {(user?.uid === songItem.userId ||
+                          userProfile?.role === 'admin') && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <Trash2 className="h-4 w-4" />
+                                <span className="sr-only">Löschen</span>
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Sind Sie sicher?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Diese Aktion kann nicht rückgängig gemacht
+                                  werden. Dadurch wird das Song-Sheet dauerhaft
+                                  gelöscht.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(songItem)}
+                                >
+                                  Löschen
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
       </main>
     </div>
