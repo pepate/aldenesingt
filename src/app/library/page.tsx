@@ -3,19 +3,21 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Upload,
-  BookOpen,
+  Music,
   Trash2,
   PlusCircle,
   LogIn,
   Loader2,
   Share2,
   Library as LibraryIcon,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -38,8 +40,7 @@ import {
   doc,
   setDoc,
 } from 'firebase/firestore';
-import type { PdfDocument } from '@/lib/types';
-import { v4 as uuidv4 } from 'uuid';
+import type { Song } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,6 +53,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { UserNav } from '@/components/user-nav';
+import { extractSongFromPdf } from '@/ai/flows/extract-song-flow';
 
 function LibraryPage() {
   const { user, loading: userLoading } = useUser();
@@ -60,19 +62,18 @@ function LibraryPage() {
   const { toast } = useToast();
 
   const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const documentsRef = useMemoFirebase(
-    () => (firestore ? collection(firestore, 'pdf_documents') : null),
+  const songsRef = useMemoFirebase(
+    () => (firestore ? collection(firestore, 'songs') : null),
     [firestore]
   );
 
   const {
-    data: documents,
-    loading: docsLoading,
+    data: songs,
+    loading: songsLoading,
     error,
-  } = useCollection<PdfDocument>(documentsRef);
+  } = useCollection<Song>(songsRef);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -86,79 +87,95 @@ function LibraryPage() {
         return;
       }
       setFile(selectedFile);
-      if (!title) {
-        setTitle(selectedFile.name.replace('.pdf', ''));
-      }
     }
   };
 
-  const handleUpload = async () => {
-    if (!file || !title || !user || !firestore || !documentsRef) {
+  const handleProcessAndUpload = async () => {
+    if (!file || !user || !firestore || !songsRef) {
       toast({
         variant: 'destructive',
         title: 'Fehlende Informationen',
-        description:
-          'Bitte wählen Sie eine Datei aus und geben Sie einen Titel ein.',
+        description: 'Bitte wählen Sie eine Datei aus.',
       });
       return;
     }
 
-    setIsUploading(true);
+    setIsProcessing(true);
     try {
-      const docId = uuidv4();
-      const storagePath = `documents/${user.uid}/${docId}.pdf`;
-      const downloadURL = await uploadFile(storagePath, file);
+      // 1. Convert file to data URI
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const pdfDataUri = reader.result as string;
 
-      await addDoc(documentsRef, {
-        id: docId,
-        title,
-        url: downloadURL,
-        userId: user.uid,
-        createdAt: serverTimestamp(),
-        storagePath: storagePath,
-      });
+        // 2. Call Genkit flow to extract content
+        const extractedData = await extractSongFromPdf({ pdfDataUri });
 
-      toast({
-        title: 'Upload erfolgreich',
-        description: `"${title}" wurde zur Bibliothek hinzugefügt.`,
-      });
-      setFile(null);
-      setTitle('');
+        if (!extractedData || !extractedData.content) {
+            throw new Error("Die KI konnte keinen Inhalt aus der PDF extrahieren.");
+        }
+
+        // 3. Upload original PDF to storage for reference
+        const fileId = Date.now().toString(); // simple unique enough id
+        const storagePath = `documents/${user.uid}/${fileId}-${file.name}`;
+        await uploadFile(storagePath, file);
+
+        // 4. Save extracted content to Firestore
+        await addDoc(songsRef, {
+          userId: user.uid,
+          title: extractedData.title,
+          content: extractedData.content,
+          storagePath: storagePath,
+          createdAt: serverTimestamp(),
+        });
+
+        toast({
+          title: 'Song extrahiert & gespeichert',
+          description: `"${extractedData.title}" wurde zur Bibliothek hinzugefügt.`,
+        });
+        setFile(null);
+      };
+      reader.onerror = (error) => {
+        console.error("FileReader Error: ", error);
+        throw new Error("Fehler beim Lesen der Datei.");
+      }
+
     } catch (error: any) {
-      console.error('Upload Error: ', error);
+      console.error('Processing Error: ', error);
       toast({
         variant: 'destructive',
-        title: 'Upload fehlgeschlagen',
+        title: 'Verarbeitung fehlgeschlagen',
         description:
-          error.message || 'Die Datei konnte nicht hochgeladen werden.',
+          error.message ||
+          'Der Song konnte nicht aus der Datei extrahiert werden.',
       });
     } finally {
-      setIsUploading(false);
+      setIsProcessing(false);
     }
   };
 
-  const handleDelete = async (docToDelete: PdfDocument) => {
-    if (!firestore || !user || user.uid !== docToDelete.userId) return;
+  const handleDelete = async (songToDelete: Song) => {
+    if (!firestore || !user || user.uid !== songToDelete.userId) return;
     try {
       // First, delete the file from Storage
-      if (docToDelete.storagePath) {
-        await deleteFile(docToDelete.storagePath);
+      if (songToDelete.storagePath) {
+        await deleteFile(songToDelete.storagePath);
       }
 
       // Then, delete the document from Firestore
-      const docRef = doc(firestore, 'pdf_documents', docToDelete.id);
+      const docRef = doc(firestore, 'songs', songToDelete.id);
       await deleteDoc(docRef);
 
       toast({
-        title: 'Dokument gelöscht',
-        description: `"${docToDelete.title}" wurde entfernt.`,
+        title: 'Song gelöscht',
+        description: `"${songToDelete.title}" wurde entfernt.`,
       });
     } catch (error: any) {
       console.error('Delete Error:', error);
       toast({
         variant: 'destructive',
         title: 'Löschen fehlgeschlagen',
-        description: 'Das Dokument konnte nicht gelöscht werden.',
+        description: 'Der Song konnte nicht gelöscht werden.',
       });
     }
   };
@@ -166,12 +183,10 @@ function LibraryPage() {
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
 
-    // Generate a 4-digit alphanumeric session ID
     const sessionId = Math.random().toString(36).substring(2, 6).toUpperCase();
 
     try {
       const sessionCollection = collection(firestore, 'sessions');
-      // Use setDoc with the generated ID
       await setDoc(doc(sessionCollection, sessionId), {
         id: sessionId,
         hostId: user.uid,
@@ -204,7 +219,8 @@ function LibraryPage() {
         <LibraryIcon className="h-16 w-16 text-primary mb-4" />
         <h2 className="text-2xl font-bold">Bitte anmelden</h2>
         <p className="text-muted-foreground mt-2 mb-6">
-          Sie müssen angemeldet sein, um die Bibliothek zu sehen und Dokumente hochzuladen.
+          Sie müssen angemeldet sein, um die Bibliothek zu sehen und Songs
+          hochzuladen.
         </p>
         <Button onClick={() => router.push('/auth')}>
           <LogIn className="mr-2" />
@@ -232,10 +248,11 @@ function LibraryPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <PlusCircle />
-              Neues Dokument hochladen
+              Neuen Song hinzufügen
             </CardTitle>
             <CardDescription>
-              Laden Sie eine neue PDF-Datei in die gemeinsame Bibliothek hoch.
+              Laden Sie eine PDF-Datei hoch. Unsere KI extrahiert automatisch
+              Text und Akkorde.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -245,25 +262,19 @@ function LibraryPage() {
               onChange={handleFileChange}
               className="file:text-primary file:font-semibold"
             />
-            <Input
-              placeholder="Titel des Dokuments"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={!file}
-            />
             <Button
-              onClick={handleUpload}
-              disabled={isUploading || !file || !title}
+              onClick={handleProcessAndUpload}
+              disabled={isProcessing || !file}
             >
-              {isUploading ? (
+              {isProcessing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Wird hochgeladen...
+                  Wird verarbeitet...
                 </>
               ) : (
                 <>
-                  <Upload className="mr-2" />
-                  Hochladen
+                  <Sparkles className="mr-2" />
+                  Extrahieren & Hochladen
                 </>
               )}
             </Button>
@@ -271,8 +282,8 @@ function LibraryPage() {
         </Card>
 
         <div>
-          <h2 className="text-2xl font-bold mb-4">Alle Dokumente</h2>
-          {docsLoading && (
+          <h2 className="text-2xl font-bold mb-4">Alle Songs</h2>
+          {songsLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(3)].map((_, i) => (
                 <Card key={i} className="h-40 flex items-center justify-center">
@@ -283,39 +294,36 @@ function LibraryPage() {
           )}
           {error && (
             <p className="text-destructive">
-              Fehler beim Laden der Dokumente: {error.message}
+              Fehler beim Laden der Songs: {error.message}
             </p>
           )}
-          {!docsLoading && documents && documents.length === 0 && (
+          {!songsLoading && songs && songs.length === 0 && (
             <p className="text-muted-foreground mt-4">
-              Es wurden noch keine Dokumente hochgeladen.
+              Es wurden noch keine Songs hinzugefügt.
             </p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {documents?.map((docItem) => (
-              <Card key={docItem.id} className="flex flex-col">
-                <CardHeader>
-                  <CardTitle className="truncate">{docItem.title}</CardTitle>
+            {songs?.map((songItem) => (
+              <Card key={songItem.id} className="flex flex-col">
+                <CardHeader className="flex-row items-start gap-4 space-y-0">
+                    <div className='flex items-center justify-center h-12 w-12 rounded-lg bg-primary/10'>
+                        <Music className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                        <CardTitle className="truncate text-lg">{songItem.title}</CardTitle>
+                    </div>
                 </CardHeader>
-                <CardContent className="flex-grow flex items-center justify-center">
-                  <a
-                    href={docItem.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <BookOpen className="h-16 w-16 text-muted-foreground hover:text-primary transition-colors" />
-                  </a>
-                </CardContent>
-                <CardContent className="flex justify-between items-center gap-2">
+                <CardContent className="flex-grow"></CardContent>
+                <CardFooter className="flex justify-between items-center gap-2">
                   <Button
                     size="sm"
                     className="w-full"
-                    onClick={() => createSession(docItem.id)}
+                    onClick={() => createSession(songItem.id)}
                   >
                     <Share2 className="mr-2 h-4 w-4" />
                     Session starten
                   </Button>
-                  {user && user.uid === docItem.userId && (
+                  {user && user.uid === songItem.userId && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="destructive" size="icon">
@@ -327,13 +335,13 @@ function LibraryPage() {
                           <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
                           <AlertDialogDescription>
                             Diese Aktion kann nicht rückgängig gemacht werden.
-                            Dadurch wird das Dokument dauerhaft gelöscht.
+                            Dadurch wird der Song dauerhaft gelöscht.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Abbrechen</AlertDialogCancel>
                           <AlertDialogAction
-                            onClick={() => handleDelete(docItem)}
+                            onClick={() => handleDelete(songItem)}
                           >
                             Löschen
                           </AlertDialogAction>
@@ -341,7 +349,7 @@ function LibraryPage() {
                       </AlertDialogContent>
                     </AlertDialog>
                   )}
-                </CardContent>
+                </CardFooter>
               </Card>
             ))}
           </div>

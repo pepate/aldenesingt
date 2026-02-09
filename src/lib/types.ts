@@ -1,7 +1,10 @@
 export type Song = {
   id: string;
   title: string;
-  url: string;
+  content: string;
+  userId: string;
+  createdAt: any;
+  storagePath: string;
 };
 
 export type Session = {
@@ -10,15 +13,6 @@ export type Session = {
   scroll: number;
   hostId: string;
   createdAt: any;
-};
-
-export type PdfDocument = {
-  id: string;
-  title: string;
-  url: string;
-  userId: string;
-  createdAt: any;
-  storagePath: string;
 };
 
 export type SessionParticipant = {

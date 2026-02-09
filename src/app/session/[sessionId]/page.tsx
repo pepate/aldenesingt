@@ -18,7 +18,7 @@ import QRCode from 'react-qr-code';
 
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import PdfViewer from '@/components/pdf-viewer';
+import SongViewer from '@/components/song-viewer';
 import {
   Select,
   SelectContent,
@@ -51,7 +51,7 @@ import {
   errorEmitter,
   FirestorePermissionError,
 } from '@/firebase';
-import type { Session, PdfDocument, SessionParticipant } from '@/lib/types';
+import type { Session, Song, SessionParticipant } from '@/lib/types';
 import {
   doc,
   updateDoc,
@@ -102,30 +102,28 @@ function SessionPageContent() {
 
   const isHost = session?.hostId === user?.uid;
 
-  // Global documents for the host's dropdown
-  const allDocumentsRef = useMemoFirebase(
-    () => (firestore ? collection(firestore, 'pdf_documents') : null),
+  // Global songs for the host's dropdown
+  const allSongsRef = useMemoFirebase(
+    () => (firestore ? collection(firestore, 'songs') : null),
     [firestore]
   );
-  const { data: allDocuments, loading: docsLoading } =
-    useCollection<PdfDocument>(allDocumentsRef);
+  const { data: allSongs, loading: songsLoading } =
+    useCollection<Song>(allSongsRef);
 
-  // Current document for the session
-  const currentDocumentRef = useMemoFirebase(
+  // Current song for the session
+  const currentSongRef = useMemoFirebase(
     () =>
       firestore && session?.songId
-        ? doc(firestore, 'pdf_documents', session.songId)
+        ? doc(firestore, 'songs', session.songId)
         : null,
     [firestore, session?.songId]
   );
-  const { data: currentDocument, loading: currentDocLoading } =
-    useDoc<PdfDocument>(currentDocumentRef);
+  const { data: currentSong, loading: currentSongLoading } =
+    useDoc<Song>(currentSongRef);
 
   // Effect to handle session errors (like permissions)
   useEffect(() => {
     if (sessionError) {
-      // The useDoc hook now emits a contextual error, which is handled by FirebaseErrorListener
-      // We can keep this for catastrophic failures or redirection.
       toast({
         variant: 'destructive',
         title: 'Fehler bei der Sitzung',
@@ -212,16 +210,16 @@ function SessionPageContent() {
 
     try {
       await updateDoc(sessionRef, { songId: newSongId, scroll: 0 });
-      const newDoc = allDocuments?.find((d) => d.id === newSongId);
+      const newDoc = allSongs?.find((d) => d.id === newSongId);
       toast({
-        title: 'Dokument gewechselt',
-        description: `Neues Dokument: ${newDoc?.title}`,
+        title: 'Song gewechselt',
+        description: `Neuer Song: ${newDoc?.title}`,
       });
     } catch (err: any) {
       toast({
         variant: 'destructive',
         title: 'Fehler',
-        description: 'Konnte das Dokument nicht wechseln.',
+        description: 'Konnte den Song nicht wechseln.',
       });
     }
   };
@@ -239,8 +237,8 @@ function SessionPageContent() {
   const showLoading =
     sessionLoading ||
     participantsLoading ||
-    docsLoading ||
-    currentDocLoading ||
+    songsLoading ||
+    currentSongLoading ||
     !initialCheckComplete;
 
   if (showLoading && !session) {
@@ -253,9 +251,6 @@ function SessionPageContent() {
   }
 
   if (!session) {
-     // This part will be reached if the grace period is over and session is still null.
-     // The useEffect hook will have already triggered the redirection.
-     // We can show a message while redirecting.
     return (
       <div className="flex flex-col items-center justify-center h-screen text-destructive">
         <AlertTriangle className="h-12 w-12" />
@@ -284,13 +279,13 @@ function SessionPageContent() {
                 <Select
                   onValueChange={handleSongChange}
                   value={session.songId}
-                  disabled={!allDocuments || allDocuments.length === 0}
+                  disabled={!allSongs || allSongs.length === 0}
                 >
                   <SelectTrigger className="w-auto md:w-[300px] font-semibold text-lg">
-                    <SelectValue placeholder="Wähle ein Dokument..." />
+                    <SelectValue placeholder="Wähle einen Song..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {allDocuments?.map((doc) => (
+                    {allSongs?.map((doc) => (
                       <SelectItem key={doc.id} value={doc.id}>
                         {doc.title}
                       </SelectItem>
@@ -299,7 +294,7 @@ function SessionPageContent() {
                 </Select>
               ) : (
                 <span className="font-semibold text-lg">
-                  {currentDocument?.title || 'SyncScroll'}
+                  {currentSong?.title || 'SyncScroll'}
                 </span>
               )}
             </div>
@@ -408,14 +403,25 @@ function SessionPageContent() {
         </div>
       </header>
       <main className="flex-1 overflow-hidden">
-        {currentDocument && sessionId && sessionRef && (
-          <PdfViewer
-            songUrl={currentDocument.url}
+        {currentSong && sessionRef && (
+          <SongViewer
+            songContent={currentSong.content}
             sessionId={sessionId}
             isHost={isHost}
             sessionRef={sessionRef}
             initialScroll={session.scroll}
           />
+        )}
+         {!currentSong && !currentSongLoading && (
+          <div className="flex flex-col items-center justify-center h-full text-center p-4">
+            <Music className="h-16 w-16 text-muted-foreground/50" />
+            <h2 className="mt-4 text-xl font-semibold">Kein Song ausgewählt</h2>
+            {isHost ? (
+              <p className="mt-2 text-muted-foreground">Bitte wählen Sie oben einen Song aus, um die Session zu starten.</p>
+            ) : (
+              <p className="mt-2 text-muted-foreground">Der Host hat noch keinen Song für diese Session ausgewählt.</p>
+            )}
+          </div>
         )}
       </main>
     </div>

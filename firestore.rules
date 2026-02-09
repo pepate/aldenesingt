@@ -4,27 +4,22 @@
  *
  * Core Philosophy:
  * This ruleset implements a mixed security model to balance user privacy with public accessibility.
- * User-specific data (profiles, private documents) is strictly confined to the user who created it.
- * A shared, public library of documents is available for anyone to read, but write access is restricted to the document's original author.
+ * User-specific data (profiles) is strictly confined to the user who created it.
+ * A shared, public library of songs is available for anyone to read, but write access is restricted to the song's original author.
  * Collaborative sessions are managed by a designated 'host', who has full control over the session's lifecycle and participants.
  *
  * Data Structure:
  * - /users/{userId}: Private user profile data. Access is restricted to the owner.
- * - /pdf_documents/{pdfDocumentId}: A top-level collection for all publicly-readable documents. This allows for efficient, unauthenticated browsing.
+ * - /songs/{songId}: A top-level collection for all publicly-readable songs.
  * - /sessions/{sessionId}: Contains data for a single collaborative session, controlled by the 'hostId'.
  * - /sessions/{sessionId}/sessionParticipants/{sessionParticipantId}: A subcollection tracking users who have joined a session.
  *
  * Key Security Decisions:
  * - Default Deny: All paths are closed by default. Access is granted explicitly.
  * - No User Listing: It is not possible to query the top-level `/users` collection, protecting user privacy.
- * - Public Read Access: The `/pdf_documents` collection is world-readable to allow browsing without authentication, as requested.
- * - Owner-Only Writes: All write operations (create, update, delete) require authentication and are restricted to the data's owner (e.g., a user for their profile, a host for their session, an author for their document).
+ * - Public Read Access: The `/songs` collection is world-readable to allow browsing without authentication.
+ * - Owner-Only Writes: All write operations (create, update, delete) require authentication and are restricted to the data's owner (e.g., a user for their profile, a host for their session, an author for their song).
  * - Self-Join for Sessions: Users can join an existing session by creating their own participant document. They can also remove themselves. The session host retains administrative control to remove any participant.
- *
- * Denormalization for Authorization:
- * To ensure fast and secure rules, ownership is denormalized directly onto documents.
- * - `PdfDocument` and `Session` documents contain `userId` and `hostId` fields respectively. This allows rules to check ownership without expensive `get()` calls to other documents.
- * - `sessionParticipants` rules use one `get()` call to the parent `session` document to verify the host, which is an efficient and necessary pattern for subcollection security.
  *
  */
 rules_version = '2';
@@ -81,10 +76,6 @@ service cloud.firestore {
     /**
      * @description Manages user profile documents.
      * @path /users/{userId}
-     * @allow (create) An authenticated user creating their own profile document, e.g., POST /users/user_abc with auth.uid = 'user_abc'.
-     * @deny (get) A user trying to read another user's profile, e.g., GET /users/user_xyz with auth.uid = 'user_abc'.
-     * @deny (list) Any attempt to list all users in the collection.
-     * @principle Restricts access to a user's own data tree.
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -95,14 +86,10 @@ service cloud.firestore {
     }
 
     /**
-     * @description Manages the public library of PDF documents.
-     * @path /pdf_documents/{pdfDocumentId}
-     * @allow (get, list) Any user, including unauthenticated ones, can read and list all public documents.
-     * @allow (create) An authenticated user uploading a new document and setting themselves as the owner.
-     * @deny (update) A user trying to modify a document they did not upload.
-     * @principle Public Read with Owner-Only Writes.
+     * @description Manages the public library of songs.
+     * @path /songs/{songId}
      */
-    match /pdf_documents/{pdfDocumentId} {
+    match /songs/{songId} {
         allow read: if true;
         allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
         allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
@@ -111,10 +98,6 @@ service cloud.firestore {
     /**
      * @description Manages collaborative viewing sessions.
      * @path /sessions/{sessionId}
-     * @allow (create) An authenticated user creating a new session and setting themselves as the host.
-     * @allow (get, list) Any authenticated user can read or list available sessions.
-     * @deny (update) A user who is not the session host trying to change the scroll position or other details.
-     * @principle Enforces "host" ownership for writes, while allowing reads for participants.
      */
     match /sessions/{sessionId} {
       allow get: if isSignedIn();
@@ -126,10 +109,6 @@ service cloud.firestore {
       /**
        * @description Manages participants within a session.
        * @path /sessions/{sessionId}/sessionParticipants/{sessionParticipantId}
-       * @allow (create) A signed-in user adding themselves to a session.
-       * @allow (delete) A participant removing themselves, OR the session host removing any participant.
-       * @deny (update) No updates are allowed to participant records; they must be deleted and re-created.
-       * @principle Allows self-joining and self-removal, with host override.
        */
       match /sessionParticipants/{sessionParticipantId} {
         allow get: if isSignedIn();
@@ -151,9 +130,6 @@ service firebase.storage {
     /**
      * @description Manages user-specific documents.
      * @path /documents/{userId}/{allPaths=**}
-     * @allow (read, write) An authenticated user can read and write to their own documents folder.
-     * @deny Any user trying to access another user's documents.
-     * @principle Enforces strict ownership for all files within a user's private directory.
      */
     match /documents/{userId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;

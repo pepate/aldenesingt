@@ -31,39 +31,38 @@
       },
       "required": ["id", "email"]
     },
-    "PdfDocument": {
-      "title": "PDF Document",
-      "description": "Represents a PDF document uploaded by a user.",
+    "Song": {
+      "title": "Song",
+      "description": "Represents a song with lyrics and chords extracted from a document.",
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
-          "description": "The unique identifier for the document."
+          "description": "The unique identifier for the song."
         },
         "userId": {
           "type": "string",
-          "description": "The ID of the user who uploaded the document."
+          "description": "The ID of the user who uploaded the song."
         },
         "title": {
           "type": "string",
-          "description": "The title of the document."
+          "description": "The title of the song."
         },
-        "url": {
+        "content": {
           "type": "string",
-          "format": "uri",
-          "description": "The public URL to access the PDF file in Firebase Storage."
+          "description": "The extracted lyrics and chords, formatted for display."
         },
         "storagePath": {
           "type": "string",
-          "description": "The path to the file in Firebase Storage."
+          "description": "The path to the original file in Firebase Storage."
         },
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "description": "The timestamp when the document was uploaded."
+          "description": "The timestamp when the song was created."
         }
       },
-      "required": ["id", "userId", "title", "url", "storagePath", "createdAt"]
+      "required": ["id", "userId", "title", "content", "createdAt"]
     },
     "Session": {
       "title": "Session",
@@ -80,7 +79,7 @@
         },
         "songId": {
           "type": "string",
-          "description": "The ID of the PDF document being viewed."
+          "description": "The ID of the song document being viewed."
         },
         "scroll": {
           "type": "number",
@@ -139,11 +138,11 @@
       },
       "description": "Stores public profiles for all users."
     },
-    "/pdf_documents/{pdfDocumentId}": {
+    "/songs/{songId}": {
       "schema": {
-        "$ref": "#/entities/PdfDocument"
+        "$ref": "#/entities/Song"
       },
-      "description": "A top-level collection for publicly readable documents."
+      "description": "A top-level collection for all publicly readable songs."
     },
     "/sessions/{sessionId}": {
       "schema": {
