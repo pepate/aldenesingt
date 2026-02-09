@@ -5,9 +5,11 @@ export type Song = {
 };
 
 export type Session = {
+  id: string;
   songId: string;
   scroll: number;
   hostId: string;
+  createdAt: any;
 };
 
 export type PdfDocument = {

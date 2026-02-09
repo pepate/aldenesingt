@@ -166,13 +166,14 @@ function LibraryPage() {
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
 
-    // Generate a 3-digit alphanumeric session ID
-    const sessionId = Math.random().toString(36).substring(2, 5).toUpperCase();
+    // Generate a 4-digit alphanumeric session ID
+    const sessionId = Math.random().toString(36).substring(2, 6).toUpperCase();
 
     try {
       const sessionCollection = collection(firestore, 'sessions');
       // Use setDoc with the generated ID
       await setDoc(doc(sessionCollection, sessionId), {
+        id: sessionId,
         hostId: user.uid,
         songId: songId,
         scroll: 0,
