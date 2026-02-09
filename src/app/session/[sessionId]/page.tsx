@@ -55,6 +55,7 @@ function SessionPageContent() {
   const { toast } = useToast();
   const { firestore } = useFirebase();
   const { user } = useUser();
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
 
   const sessionId = Array.isArray(params.sessionId)
     ? params.sessionId[0].toUpperCase()
@@ -89,18 +90,33 @@ function SessionPageContent() {
   );
   const { data: allDocuments, loading: docsLoading } =
     useCollection<PdfDocument>(allDocumentsRef);
-  
+
   // Current document for the session
   const currentDocumentRef = useMemoFirebase(
-    () => (firestore && session?.songId ? doc(firestore, 'pdf_documents', session.songId) : null),
+    () =>
+      firestore && session?.songId
+        ? doc(firestore, 'pdf_documents', session.songId)
+        : null,
     [firestore, session?.songId]
   );
-  const {data: currentDocument, loading: currentDocLoading} = useDoc<PdfDocument>(currentDocumentRef);
+  const { data: currentDocument, loading: currentDocLoading } =
+    useDoc<PdfDocument>(currentDocumentRef);
 
-
-  // Effect to handle session errors
+  // Effect to handle session errors (like permissions)
   useEffect(() => {
-    if (!sessionLoading && !session) {
+    if (sessionError) {
+      toast({
+        variant: 'destructive',
+        title: 'Fehler bei der Sitzung',
+        description: 'Auf diese Sitzung konnte nicht zugegriffen werden.',
+      });
+      router.push('/');
+    }
+  }, [sessionError, router, toast]);
+
+  // Effect to handle the "not found" case with a grace period
+  useEffect(() => {
+    if (initialCheckComplete && !session) {
       toast({
         variant: 'destructive',
         title: 'Fehler',
@@ -109,7 +125,18 @@ function SessionPageContent() {
       });
       router.push('/');
     }
-  }, [session, sessionLoading, router, toast]);
+  }, [session, initialCheckComplete, router, toast]);
+
+  // Timer to manage the grace period for session loading
+  useEffect(() => {
+    if (!sessionLoading) {
+      const timer = setTimeout(() => {
+        setInitialCheckComplete(true);
+      }, 1500); // 1.5s grace period
+      return () => clearTimeout(timer);
+    }
+  }, [sessionLoading]);
+
 
   // Effect to join/leave session
   useEffect(() => {
@@ -165,7 +192,14 @@ function SessionPageContent() {
     }
   };
 
-  if (sessionLoading || docsLoading || participantsLoading || currentDocLoading) {
+  const showLoading =
+    sessionLoading ||
+    participantsLoading ||
+    docsLoading ||
+    currentDocLoading ||
+    !initialCheckComplete;
+
+  if (showLoading && !session) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -175,6 +209,9 @@ function SessionPageContent() {
   }
 
   if (!session) {
+     // This part will be reached if the grace period is over and session is still null.
+     // The useEffect hook will have already triggered the redirection.
+     // We can show a message while redirecting.
     return (
       <div className="flex flex-col items-center justify-center h-screen text-destructive">
         <AlertTriangle className="h-12 w-12" />
@@ -185,7 +222,7 @@ function SessionPageContent() {
       </div>
     );
   }
-  
+
   return (
     <div className="flex flex-col h-screen bg-background">
       <header className="flex items-center justify-between p-3 border-b shrink-0">
