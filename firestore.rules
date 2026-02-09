@@ -124,15 +124,12 @@ service cloud.firestore {
 /**
  * @description Firebase Storage Security Rules
  * These rules govern access to files stored in Firebase Storage.
+ * Storage is no longer used in this version of the app.
  */
 service firebase.storage {
   match /b/{bucket}/o {
-    /**
-     * @description Manages user-specific documents.
-     * @path /documents/{userId}/{allPaths=**}
-     */
-    match /documents/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

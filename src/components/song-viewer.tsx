@@ -2,12 +2,12 @@
 
 import { useRef, useEffect, useCallback, useMemo } from 'react';
 import { DocumentReference, onSnapshot, updateDoc } from 'firebase/firestore';
-import type { Session } from '@/lib/types';
+import type { Session, Song } from '@/lib/types';
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
-import { transposeContent } from '@/lib/transpose';
+import { transposeSongSheet } from '@/lib/transpose';
 
 interface SongViewerProps {
-  songContent: string;
+  song: Song;
   sessionId: string;
   isHost: boolean;
   sessionRef: DocumentReference<Session> | null;
@@ -18,7 +18,7 @@ interface SongViewerProps {
 const DEBOUNCE_TIME = 200;
 
 export default function SongViewer({
-  songContent,
+  song,
   isHost,
   sessionRef,
   initialScroll,
@@ -30,17 +30,17 @@ export default function SongViewer({
 
   // Memoize the transposed content. It will update for everyone
   // when the `transpose` prop changes (which comes from the session doc).
-  const transposedContent = useMemo(() => {
-    return transposeContent(songContent, transpose);
-  }, [songContent, transpose]);
-
+  const transposedSheet = useMemo(() => {
+    if (!song.sheet) return null;
+    return transposeSongSheet(song.sheet, transpose);
+  }, [song.sheet, transpose]);
 
   // Reset scroll when content changes
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
-  }, [songContent]);
+  }, [song.id]);
 
   const sendScrollUpdate = useCallback(
     (scrollTop: number) => {
@@ -79,8 +79,8 @@ export default function SongViewer({
       isUpdatingByListener.current = false; // Reset flag after programmatic scroll
       return;
     }
-    if(isHost) {
-        debouncedSendScroll(e.currentTarget.scrollTop);
+    if (isHost) {
+      debouncedSendScroll(e.currentTarget.scrollTop);
     }
   };
 
@@ -125,6 +125,9 @@ export default function SongViewer({
     }
   }, [initialScroll]);
 
+  if (!transposedSheet) {
+    return <div className="p-4">Song-Daten werden geladen...</div>;
+  }
 
   return (
     <div
@@ -137,9 +140,29 @@ export default function SongViewer({
         scrollbarColor: 'hsl(var(--primary)) hsl(var(--background))',
       }}
     >
-      <pre className="text-sm sm:text-base font-code whitespace-pre-wrap">
-        {transposedContent}
-      </pre>
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-4">
+          <p><span className="font-bold">Erscheinungsdatum:</span> {transposedSheet.releaseDate}</p>
+          <p><span className="font-bold">Genre:</span> {transposedSheet.genre}</p>
+          <p><span className="font-bold">Tonart:</span> {transposedSheet.key}</p>
+        </div>
+
+        {transposedSheet.song.map((part, partIndex) => (
+          <div key={partIndex} className="mb-6">
+            <h3 className="font-bold text-lg mb-2 border-b pb-1">{part.part}</h3>
+            {part.lines.map((line, lineIndex) => (
+              <div key={lineIndex} className="flex flex-col mb-1 font-code text-sm sm:text-base">
+                {line.chords && (
+                  <div className="text-primary font-bold whitespace-pre">
+                    {line.chords}
+                  </div>
+                )}
+                <div className="whitespace-pre">{line.text}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

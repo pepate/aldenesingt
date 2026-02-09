@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Upload,
   Music,
   Trash2,
   PlusCircle,
@@ -11,7 +10,6 @@ import {
   Share2,
   Library as LibraryIcon,
   Sparkles,
-  Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,8 +27,6 @@ import {
   useUser,
   useCollection,
   useFirebase,
-  uploadFile,
-  deleteFile,
   useMemoFirebase,
 } from '@/firebase';
 import {
@@ -40,9 +36,6 @@ import {
   deleteDoc,
   doc,
   setDoc,
-  query,
-  where,
-  getDocs,
 } from 'firebase/firestore';
 import type { Song } from '@/lib/types';
 import {
@@ -57,14 +50,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { UserNav } from '@/components/user-nav';
-import { extractSongFromPdf } from '@/ai/flows/extract-song-flow';
-import { extractSongFromUrl } from '@/ai/flows/extract-song-from-url-flow';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
+import { generateSongSheet } from '@/ai/flows/generate-song-sheet-flow';
+import { Label } from '@/components/ui/label';
 
 function LibraryPage() {
   const { user, loading: userLoading } = useUser();
@@ -72,10 +59,9 @@ function LibraryPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [file, setFile] = useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [url, setUrl] = useState('');
-  const [isImportingUrl, setIsImportingUrl] = useState(false);
+  const [songTitle, setSongTitle] = useState('');
+  const [artist, setArtist] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // This query fetches songs for everyone.
   const songsRef = useMemoFirebase(
@@ -89,145 +75,60 @@ function LibraryPage() {
     error,
   } = useCollection<Song>(songsRef);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      if (selectedFile.type !== 'application/pdf') {
-        toast({
-          variant: 'destructive',
-          title: 'Ungültiger Dateityp',
-          description: 'Bitte laden Sie nur PDF-Dateien hoch.',
-        });
-        return;
-      }
-      setFile(selectedFile);
-    }
-  };
-
-  const handleProcessAndUpload = async () => {
-    if (!file || !user || !firestore) {
+  const handleGenerateSong = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!songTitle || !artist || !user || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Fehlende Informationen',
-        description: 'Bitte wählen Sie eine Datei aus.',
+        description: 'Bitte geben Sie Songtitel und Künstler an.',
       });
       return;
     }
 
-    setIsProcessing(true);
+    setIsGenerating(true);
     try {
-      // 1. Convert file to data URI
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const pdfDataUri = reader.result as string;
+      // 1. Call Genkit flow to generate structured data
+      const { songtitle, artist: songArtist, sheet } = await generateSongSheet({ title: songTitle, artist });
 
-        // 2. Call Genkit flow to extract content
-        const extractedData = await extractSongFromPdf({ pdfDataUri });
-
-        if (!extractedData || !extractedData.content) {
-          throw new Error(
-            'Die KI konnte keinen Inhalt aus der PDF extrahieren.'
-          );
-        }
-
-        // 3. Upload original PDF to storage for reference
-        const fileId = Date.now().toString(); // simple unique enough id
-        const storagePath = `documents/${user.uid}/${fileId}-${file.name}`;
-        await uploadFile(storagePath, file);
-
-        // 4. Save extracted content to Firestore
-        const songsCollectionRef = collection(firestore, 'songs');
-        await addDoc(songsCollectionRef, {
-          userId: user.uid,
-          title: extractedData.title,
-          content: extractedData.content,
-          storagePath: storagePath,
-          createdAt: serverTimestamp(),
-        });
-
-        toast({
-          title: 'Song extrahiert & gespeichert',
-          description: `"${extractedData.title}" wurde zur Bibliothek hinzugefügt.`,
-        });
-        setFile(null);
-      };
-      reader.onerror = (error) => {
-        console.error('FileReader Error: ', error);
-        throw new Error('Fehler beim Lesen der Datei.');
-      };
-    } catch (error: any) {
-      console.error('Processing Error: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Verarbeitung fehlgeschlagen',
-        description:
-          error.message ||
-          'Der Song konnte nicht aus der Datei extrahiert werden.',
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleImportFromUrl = async () => {
-    if (!url || !user || !firestore) {
-      toast({
-        variant: 'destructive',
-        title: 'Fehlende Informationen',
-        description: 'Bitte geben Sie eine gültige URL ein.',
-      });
-      return;
-    }
-
-    setIsImportingUrl(true);
-    try {
-      // Call Genkit flow to extract content from URL
-      const extractedData = await extractSongFromUrl({ url });
-
-      if (!extractedData || !extractedData.content) {
-        throw new Error(
-          'Die KI konnte keinen Inhalt von der Webseite extrahieren.'
-        );
+      if (!sheet || !sheet.song) {
+        throw new Error('Die KI konnte kein gültiges Song-Sheet erstellen.');
       }
 
-      // Save extracted content to Firestore
+      // 2. Save structured content to Firestore
       const songsCollectionRef = collection(firestore, 'songs');
       await addDoc(songsCollectionRef, {
         userId: user.uid,
-        title: extractedData.title,
-        content: extractedData.content,
-        // No storagePath for URL imports
+        title: songtitle,
+        artist: songArtist,
+        sheet: sheet,
         createdAt: serverTimestamp(),
       });
 
       toast({
-        title: 'Song importiert & gespeichert',
-        description: `"${extractedData.title}" wurde zur Bibliothek hinzugefügt.`,
+        title: 'Song-Sheet generiert & gespeichert',
+        description: `"${songtitle}" von ${songArtist} wurde zur Bibliothek hinzugefügt.`,
       });
-      setUrl(''); // Clear the input
+      setSongTitle('');
+      setArtist('');
     } catch (error: any) {
-      console.error('URL Import Error: ', error);
+      console.error('Processing Error: ', error);
       toast({
         variant: 'destructive',
-        title: 'Import fehlgeschlagen',
+        title: 'Generierung fehlgeschlagen',
         description:
-          error.message || 'Der Song konnte nicht von der URL importiert werden.',
+          error.message ||
+          'Das Song-Sheet konnte nicht generiert werden.',
       });
     } finally {
-      setIsImportingUrl(false);
+      setIsGenerating(false);
     }
   };
 
- const handleDelete = async (songToDelete: Song) => {
+  const handleDelete = async (songToDelete: Song) => {
     if (!firestore || !user || user.uid !== songToDelete.userId) return;
     try {
-      // First, delete the file from Storage if it exists
-      if (songToDelete.storagePath) {
-        await deleteFile(songToDelete.storagePath);
-      }
-      
-      // Then, delete the document from Firestore
+      // Delete the document from Firestore
       const docRef = doc(firestore, 'songs', songToDelete.id);
       await deleteDoc(docRef);
 
@@ -244,7 +145,7 @@ function LibraryPage() {
       });
     }
   };
-  
+
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
 
@@ -285,8 +186,8 @@ function LibraryPage() {
         <LibraryIcon className="h-16 w-16 text-primary mb-4" />
         <h2 className="text-2xl font-bold">Bitte anmelden</h2>
         <p className="text-muted-foreground mt-2 mb-6">
-          Sie müssen angemeldet sein, um die Bibliothek zu sehen und Songs
-          hochzuladen.
+          Sie müssen angemeldet sein, um die Bibliothek zu sehen und Songs zu
+          generieren.
         </p>
         <Button onClick={() => router.push('/auth')}>
           <LogIn className="mr-2" />
@@ -314,74 +215,54 @@ function LibraryPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <PlusCircle />
-              Neuen Song hinzufügen
+              Neuen Song generieren
             </CardTitle>
             <CardDescription>
-              Laden Sie eine PDF-Datei hoch oder importieren Sie von einer
-              Webseite. Unsere KI extrahiert automatisch Text und Akkorde.
+              Geben Sie einen Songtitel und Künstler an. Unsere KI generiert
+              automatisch ein Song-Sheet mit Text und Akkorden.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="pdf" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="pdf">
-                  <Upload className="mr-2 h-4 w-4" />
-                  PDF-Datei
-                </TabsTrigger>
-                <TabsTrigger value="url">
-                  <Globe className="mr-2 h-4 w-4" />
-                  Webseite
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="pdf" className="pt-4 space-y-4">
-                <Input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={handleFileChange}
-                  className="file:text-primary file:font-semibold"
-                />
-                <Button
-                  onClick={handleProcessAndUpload}
-                  disabled={isProcessing || !file}
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Wird verarbeitet...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2" />
-                      Extrahieren & Hochladen
-                    </>
-                  )}
-                </Button>
-              </TabsContent>
-              <TabsContent value="url" className="pt-4 space-y-4">
-                <Input
-                  type="url"
-                  placeholder="https://www.ultimate-guitar.com/..."
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                />
-                <Button
-                  onClick={handleImportFromUrl}
-                  disabled={isImportingUrl || !url}
-                >
-                  {isImportingUrl ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Wird importiert...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2" />
-                      Extrahieren & Importieren
-                    </>
-                  )}
-                </Button>
-              </TabsContent>
-            </Tabs>
+            <form onSubmit={handleGenerateSong} className="space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="song-title">Songtitel</Label>
+                  <Input
+                    id="song-title"
+                    placeholder="z.B. Über den Wolken"
+                    value={songTitle}
+                    onChange={(e) => setSongTitle(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="artist">Künstler</Label>
+                  <Input
+                    id="artist"
+                    placeholder="z.B. Reinhard Mey"
+                    value={artist}
+                    onChange={(e) => setArtist(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <Button
+                type="submit"
+                disabled={isGenerating || !songTitle || !artist}
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Wird generiert...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2" />
+                    Song-Sheet generieren
+                  </>
+                )}
+              </Button>
+            </form>
           </CardContent>
         </Card>
 
@@ -390,7 +271,7 @@ function LibraryPage() {
           {songsLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(3)].map((_, i) => (
-                <Card key={i} className="h-40 flex items-center justify-center">
+                <Card key={i} className="h-48 flex items-center justify-center">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </Card>
               ))}
@@ -403,7 +284,7 @@ function LibraryPage() {
           )}
           {!songsLoading && songs && songs.length === 0 && (
             <p className="text-muted-foreground mt-4">
-              Es wurden noch keine Songs hinzugefügt.
+              Es wurden noch keine Songs generiert.
             </p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -417,6 +298,7 @@ function LibraryPage() {
                     <CardTitle className="truncate text-lg">
                       {songItem.title}
                     </CardTitle>
+                    <CardDescription>{songItem.artist}</CardDescription>
                   </div>
                 </CardHeader>
                 <CardContent className="flex-grow"></CardContent>
@@ -441,7 +323,7 @@ function LibraryPage() {
                           <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
                           <AlertDialogDescription>
                             Diese Aktion kann nicht rückgängig gemacht werden.
-                            Dadurch wird der Song dauerhaft gelöscht.
+                            Dadurch wird das Song-Sheet dauerhaft gelöscht.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

@@ -65,11 +65,10 @@ function HomeComponent() {
         <div className="w-full max-w-4xl mx-auto">
           <div className="text-center mb-10">
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-              Synchronisierte Notenblätter
+              KI-generierte Song-Sheets
             </h2>
             <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Starte eine Sitzung, teile deinen Bildschirm und lasse alle mit
-              synchronisiertem Scrollen mitlesen. Perfekt für Bands und Chöre.
+              Suchen Sie nach einem Song und lassen Sie unsere KI den Rest erledigen. Starten Sie eine Sitzung und spielen Sie gemeinsam mit synchronisiertem Scrollen.
             </p>
           </div>
 
@@ -81,14 +80,12 @@ function HomeComponent() {
                   <CardTitle>Zur Bibliothek</CardTitle>
                 </div>
                 <CardDescription>
-                  Dokumente hochladen, verwalten und Sitzungen starten.
+                  Songs generieren, verwalten und Sitzungen starten.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-grow">
                 <p className="text-sm text-muted-foreground">
-                  Melde dich an, um deine persönliche Dokumenten-Bibliothek zu
-                  nutzen. Lade PDFs hoch, organisiere sie und starte mit einem
-                  Klick eine neue SyncScroll-Sitzung.
+                  Suchen Sie nach Songs und Künstlern, um sofort präzise Song-Sheets mit Text und Akkorden zu erstellen. Organisieren Sie Ihre Bibliothek und starten Sie mit einem Klick eine neue SyncScroll-Sitzung.
                 </p>
               </CardContent>
               <CardFooter>

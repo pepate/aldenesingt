@@ -1,5 +1,7 @@
 'use client';
 
+import type { SongSheet } from './types';
+
 const notesSharp = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
 const notesFlat = ['A', 'Bb', 'B', 'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab'];
 
@@ -43,59 +45,33 @@ export const transposeChord = (chord: string, amount: number): string => {
 };
 
 /**
- * Transposes the chords within a block of text containing lyrics and chords.
- * @param content The full song content.
+ * Transposes the chords within a structured song sheet.
+ * @param sheet The song sheet object.
  * @param amount The number of semitones to shift.
- * @returns The content with transposed chords.
+ * @returns A new song sheet object with transposed chords.
  */
-export const transposeContent = (content: string, amount: number): string => {
-    if (amount === 0) return content;
+export const transposeSongSheet = (sheet: SongSheet, amount: number): SongSheet => {
+    if (amount === 0) return sheet;
 
-    const lines = content.split('\n');
-    const transposedLines = [];
-
-    for (const line of lines) {
-        const trimmedLine = line.trim();
-
-        if (trimmedLine.length === 0) {
-            transposedLines.push(line);
-            continue;
-        }
-
-        // Heuristic to identify a chord line:
-        // 1. It's not a section header like [Verse].
-        // 2. All space-separated parts look like valid chords.
-        const isSectionHeader = /\[.*\]/.test(trimmedLine);
-        const tokens = trimmedLine.split(/\s+/).filter(Boolean);
-        
-        // A token is considered a chord if it starts with a valid note name.
-        // This is a robust way to handle various chord notations (m7, sus4, aug, etc.).
-        const allTokensAreChords = tokens.every(token => 
-            /^[A-G](b|#)?.*$/.test(token)
-        );
-
-        if (!isSectionHeader && allTokensAreChords) {
-            const originalSpaces = line.match(/\s+/g) || [];
-            let resultLine = '';
-            const transposedTokens = tokens.map(token => transposeChord(token, amount));
-
-            // Reconstruct the line preserving original spacing
-            for (let i = 0; i < transposedTokens.length; i++) {
-                resultLine += transposedTokens[i];
-                if (originalSpaces[i]) {
-                    resultLine += originalSpaces[i];
-                }
+    const newSongParts = sheet.song.map(part => {
+        const newLines = part.lines.map(line => {
+            if (!line.chords) {
+                return line;
             }
-            
-            // This logic is tricky, a simpler join is often sufficient
-            // if we assume single spaces. Let's simplify.
-            transposedLines.push(tokens.map(chord => transposeChord(chord, amount)).join(' '));
+            // Apply transposeChord to each chord in the chords string, preserving whitespace
+            const transposedChords = line.chords
+                .split(/(\s+)/) // Split by whitespace but keep the delimiter
+                .map(token => {
+                    // If the token is just whitespace, return it as is
+                    if (!token.trim()) return token;
+                    // Otherwise, it's a chord, so transpose it
+                    return transposeChord(token, amount);
+                })
+                .join('');
+            return { ...line, chords: transposedChords };
+        });
+        return { ...part, lines: newLines };
+    });
 
-        } else {
-            // This is likely a lyric line or section header, so keep it as is.
-            transposedLines.push(line);
-        }
-    }
-
-    return transposedLines.join('\n');
+    return { ...sheet, song: newSongParts };
 };

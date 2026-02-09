@@ -459,7 +459,7 @@ function SessionPageContent() {
       <main className="flex-1 overflow-hidden">
         {currentSong && sessionRef && session && (
           <SongViewer
-            songContent={currentSong.content}
+            song={currentSong}
             sessionId={sessionId}
             isHost={isHost}
             sessionRef={sessionRef}

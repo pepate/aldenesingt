@@ -1,10 +1,27 @@
+export type SongLine = {
+  chords: string;
+  text: string;
+};
+
+export type SongPart = {
+  part: string;
+  lines: SongLine[];
+};
+
+export type SongSheet = {
+  releaseDate: string;
+  genre: string;
+  key: string;
+  song: SongPart[];
+};
+
 export type Song = {
   id: string;
-  title: string;
-  content: string;
   userId: string;
   createdAt: any;
-  storagePath?: string;
+  title: string;
+  artist: string;
+  sheet: SongSheet;
 };
 
 export type Session = {
