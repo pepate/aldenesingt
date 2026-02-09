@@ -113,17 +113,18 @@ export default function PdfViewer({
         scrollbarColor: 'hsl(var(--primary)) hsl(var(--background))',
       }}
     >
-      <div className="relative w-full h-full">
+      <div className="relative w-full min-h-full">
         {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center z-20 bg-background">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 <p className="ml-2 text-muted-foreground">Dokument wird geladen...</p>
             </div>
         )}
-        <embed
+        <iframe
           key={pdfKey}
           src={`${songUrl}#toolbar=0&navpanes=0`}
-          type="application/pdf"
+          title="PDF-Dokument"
+          frameBorder="0"
           className="w-full relative z-10"
           style={{ height: '500vh' }}
           onLoad={onPdfLoad}
