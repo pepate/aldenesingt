@@ -23,7 +23,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { useUser, useCollection, useFirebase, uploadFile, deleteFile } from '@/firebase';
+import {
+  useUser,
+  useCollection,
+  useFirebase,
+  uploadFile,
+  deleteFile,
+  useMemoFirebase,
+} from '@/firebase';
 import {
   collection,
   addDoc,
@@ -55,10 +62,13 @@ function LibraryPage() {
   const [title, setTitle] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
-  const documentsRef =
-    firestore && user
-      ? collection(firestore, 'users', user.uid, 'pdf_documents')
-      : null;
+  const documentsRef = useMemoFirebase(
+    () =>
+      firestore && user
+        ? collection(firestore, 'users', user.uid, 'pdf_documents')
+        : null,
+    [firestore, user]
+  );
   const {
     data: documents,
     loading: docsLoading,
@@ -84,7 +94,7 @@ function LibraryPage() {
   };
 
   const handleUpload = async () => {
-    if (!file || !title || !user || !firestore) {
+    if (!file || !title || !user || !firestore || !documentsRef) {
       toast({
         variant: 'destructive',
         title: 'Fehlende Informationen',
@@ -100,7 +110,7 @@ function LibraryPage() {
       const storagePath = `documents/${user.uid}/${docId}.pdf`;
       const downloadURL = await uploadFile(storagePath, file);
 
-      await addDoc(documentsRef!, {
+      await addDoc(documentsRef, {
         title,
         url: downloadURL,
         userId: user.uid,
@@ -134,9 +144,15 @@ function LibraryPage() {
       if (docToDelete.storagePath) {
         await deleteFile(docToDelete.storagePath);
       }
-      
+
       // Then, delete the document from Firestore
-      const docRef = doc(firestore, 'users', user.uid, 'pdf_documents', docToDelete.id);
+      const docRef = doc(
+        firestore,
+        'users',
+        user.uid,
+        'pdf_documents',
+        docToDelete.id
+      );
       await deleteDoc(docRef);
 
       toast({
@@ -144,7 +160,7 @@ function LibraryPage() {
         description: `"${docToDelete.title}" wurde entfernt.`,
       });
     } catch (error: any) {
-      console.error("Delete Error:", error);
+      console.error('Delete Error:', error);
       toast({
         variant: 'destructive',
         title: 'Löschen fehlgeschlagen',
@@ -152,16 +168,17 @@ function LibraryPage() {
       });
     }
   };
-  
+
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
-    
+
+    // Generate a 3-digit alphanumeric session ID
     const sessionId = Math.random().toString(36).substring(2, 5).toUpperCase();
 
     try {
       const sessionCollection = collection(firestore, 'sessions');
-      await addDoc(sessionCollection, {
-        id: sessionId,
+      // Use setDoc with the generated ID
+      await setDoc(doc(sessionCollection, sessionId), {
         hostId: user.uid,
         songId: songId,
         scroll: 0,
@@ -177,7 +194,6 @@ function LibraryPage() {
       });
     }
   };
-
 
   if (userLoading) {
     return (
@@ -205,7 +221,7 @@ function LibraryPage() {
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-       <Button variant="ghost" onClick={() => router.push('/')} className="mb-4">
+      <Button variant="ghost" onClick={() => router.push('/')} className="mb-4">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Zurück zur Startseite
       </Button>
@@ -237,7 +253,10 @@ function LibraryPage() {
             onChange={(e) => setTitle(e.target.value)}
             disabled={!file}
           />
-          <Button onClick={handleUpload} disabled={isUploading || !file || !title}>
+          <Button
+            onClick={handleUpload}
+            disabled={isUploading || !file || !title}
+          >
             {isUploading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -275,18 +294,26 @@ function LibraryPage() {
           </p>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {documents?.map((doc) => (
-            <Card key={doc.id} className="flex flex-col">
+          {documents?.map((docItem) => (
+            <Card key={docItem.id} className="flex flex-col">
               <CardHeader>
-                <CardTitle className="truncate">{doc.title}</CardTitle>
+                <CardTitle className="truncate">{docItem.title}</CardTitle>
               </CardHeader>
               <CardContent className="flex-grow flex items-center justify-center">
-                 <a href={doc.url} target="_blank" rel="noopener noreferrer">
-                    <BookOpen className="h-16 w-16 text-muted-foreground hover:text-primary transition-colors"/>
-                 </a>
+                <a
+                  href={docItem.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <BookOpen className="h-16 w-16 text-muted-foreground hover:text-primary transition-colors" />
+                </a>
               </CardContent>
               <CardContent className="flex justify-between items-center gap-2">
-                <Button size="sm" className='w-full' onClick={() => createSession(doc.id)}>
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={() => createSession(docItem.id)}
+                >
                   <Share2 className="mr-2 h-4 w-4" />
                   Session starten
                 </Button>
@@ -300,12 +327,13 @@ function LibraryPage() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Diese Aktion kann nicht rückgängig gemacht werden. Dadurch wird das Dokument dauerhaft gelöscht.
+                        Diese Aktion kann nicht rückgängig gemacht werden.
+                        Dadurch wird das Dokument dauerhaft gelöscht.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDelete(doc)}>
+                      <AlertDialogAction onClick={() => handleDelete(docItem)}>
                         Löschen
                       </AlertDialogAction>
                     </AlertDialogFooter>

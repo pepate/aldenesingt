@@ -32,7 +32,13 @@ import {
 } from '@/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { useDoc, useUser, useCollection, useFirebase } from '@/firebase';
+import {
+  useDoc,
+  useUser,
+  useCollection,
+  useFirebase,
+  useMemoFirebase,
+} from '@/firebase';
 import type { Session, PdfDocument, SessionParticipant } from '@/lib/types';
 import {
   doc,
@@ -54,22 +60,35 @@ function SessionPageContent() {
     ? params.sessionId[0].toUpperCase()
     : params.sessionId.toUpperCase();
 
-  const sessionRef = firestore ? doc(firestore, 'sessions', sessionId) : null;
+  const sessionRef = useMemoFirebase(
+    () => (firestore ? doc(firestore, 'sessions', sessionId) : null),
+    [firestore, sessionId]
+  );
   const {
     data: session,
     loading: sessionLoading,
     error: sessionError,
   } = useDoc<Session>(sessionRef);
-  
-  const participantsRef = firestore ? collection(firestore, 'sessions', sessionId, 'sessionParticipants') : null;
-  const { data: participants, loading: participantsLoading } = useCollection<SessionParticipant>(participantsRef);
+
+  const participantsRef = useMemoFirebase(
+    () =>
+      firestore
+        ? collection(firestore, 'sessions', sessionId, 'sessionParticipants')
+        : null,
+    [firestore, sessionId]
+  );
+  const { data: participants, loading: participantsLoading } =
+    useCollection<SessionParticipant>(participantsRef);
 
   const isHost = session?.hostId === user?.uid;
 
-  const pdfDocumentsRef =
-    firestore && user
-      ? collection(firestore, 'users', user.uid, 'pdf_documents')
-      : null;
+  const pdfDocumentsRef = useMemoFirebase(
+    () =>
+      firestore && user
+        ? collection(firestore, 'users', user.uid, 'pdf_documents')
+        : null,
+    [firestore, user]
+  );
   const { data: userDocuments, loading: docsLoading } =
     useCollection<PdfDocument>(pdfDocumentsRef);
 
@@ -92,30 +111,58 @@ function SessionPageContent() {
 
   // Effect to find the current document details when session or user documents change
   useEffect(() => {
-    if (session && userDocuments) {
-      const doc = userDocuments.find((d) => d.id === session.songId) || null;
-      setCurrentDocument(doc);
+    // This effect is complex because the document URL is in a different collection
+    // than the session document. We need to fetch the document details separately.
+    if (session && session.songId && firestore) {
+      // Find the owner of the document, which might be the host or another user
+      // For this simple app, we assume the host owns all the docs in a session.
+      // A more complex app might need to search all users' documents.
+      if (session.hostId) {
+        const docRef = doc(
+          firestore,
+          'users',
+          session.hostId,
+          'pdf_documents',
+          session.songId
+        );
+        const unsub = onSnapshot(docRef, (docSnap) => {
+          if (docSnap.exists()) {
+            setCurrentDocument({ id: docSnap.id, ...docSnap.data() } as PdfDocument);
+          } else {
+            // Handle case where document might not be found or is in another collection
+             setCurrentDocument(null);
+          }
+        });
+        return () => unsub();
+      }
     }
-  }, [session, userDocuments]);
+  }, [session, firestore]);
+
 
   // Effect to join/leave session
   useEffect(() => {
-    if (!user || !firestore || !sessionId) return;
+    if (!user || !firestore || !sessionId || !session) return;
 
-    const participantRef = doc(firestore, 'sessions', sessionId, 'sessionParticipants', user.uid);
+    const participantRef = doc(
+      firestore,
+      'sessions',
+      sessionId,
+      'sessionParticipants',
+      user.uid
+    );
 
     setDoc(participantRef, {
-        userId: user.uid,
-        sessionId: sessionId,
-        joinedAt: serverTimestamp(),
-        displayName: user.displayName,
-        photoURL: user.photoURL
+      userId: user.uid,
+      sessionId: sessionId,
+      joinedAt: serverTimestamp(),
+      displayName: user.displayName,
+      photoURL: user.photoURL,
     });
-    
+
     return () => {
-        deleteDoc(participantRef);
+      deleteDoc(participantRef);
     };
-  }, [user, firestore, sessionId]);
+  }, [user, firestore, sessionId, session]);
 
   const handleSongChange = async (newSongId: string) => {
     if (!sessionRef || !isHost) return;
@@ -166,7 +213,7 @@ function SessionPageContent() {
       </div>
     );
   }
-
+  
   return (
     <div className="flex flex-col h-screen bg-background">
       <header className="flex items-center justify-between p-3 border-b shrink-0">
@@ -215,39 +262,56 @@ function SessionPageContent() {
             Bibliothek
           </Button>
 
-           <Popover>
+          <Popover>
             <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative">
-                    <Users className="h-5 w-5" />
-                    {participants && participants.length > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">
-                            {participants.length}
-                        </span>
-                    )}
-                </Button>
+              <Button variant="ghost" size="icon" className="relative">
+                <Users className="h-5 w-5" />
+                {participants && participants.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">
+                    {participants.length}
+                  </span>
+                )}
+              </Button>
             </PopoverTrigger>
             <PopoverContent className="w-64">
-                <div className="font-bold mb-2">Aktive Nutzer ({participants?.length || 0})</div>
-                <ul className="space-y-3 max-h-60 overflow-y-auto">
-                    {participantsLoading ? (
-                        <li><Loader2 className="h-4 w-4 animate-spin" /></li>
-                    ) : (
-                        participants?.map((p) => (
-                            <li key={p.id} className="flex items-center gap-3">
-                                <Avatar className="h-8 w-8">
-                                    {p.photoURL && <AvatarImage src={p.photoURL} alt={p.displayName || ''} />}
-                                    <AvatarFallback>{p.displayName ? p.displayName.charAt(0).toUpperCase() : 'A'}</AvatarFallback>
-                                </Avatar>
-                                <span className="text-sm truncate">{p.displayName || 'Anonymer Nutzer'}</span>
-                            </li>
-                        ))
-                    )}
-                    {(!participantsLoading && participants?.length === 0) && (
-                        <p className="text-sm text-muted-foreground">Niemand sonst ist hier.</p>
-                    )}
-                </ul>
+              <div className="font-bold mb-2">
+                Aktive Nutzer ({participants?.length || 0})
+              </div>
+              <ul className="space-y-3 max-h-60 overflow-y-auto">
+                {participantsLoading ? (
+                  <li>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </li>
+                ) : (
+                  participants?.map((p) => (
+                    <li key={p.id} className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        {p.photoURL && (
+                          <AvatarImage
+                            src={p.photoURL}
+                            alt={p.displayName || ''}
+                          />
+                        )}
+                        <AvatarFallback>
+                          {p.displayName
+                            ? p.displayName.charAt(0).toUpperCase()
+                            : 'A'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm truncate">
+                        {p.displayName || 'Anonymer Nutzer'}
+                      </span>
+                    </li>
+                  ))
+                )}
+                {!participantsLoading && participants?.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Niemand sonst ist hier.
+                  </p>
+                )}
+              </ul>
             </PopoverContent>
-        </Popover>
+          </Popover>
 
           <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-muted-foreground">
             {isHost ? (
@@ -276,7 +340,7 @@ function SessionPageContent() {
         </div>
       </header>
       <main className="flex-1 overflow-hidden">
-        {currentDocument && sessionId && (
+        {currentDocument && sessionId && sessionRef && (
           <PdfViewer
             songUrl={currentDocument.url}
             sessionId={sessionId}
