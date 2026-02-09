@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
@@ -89,9 +89,14 @@ function LibraryPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [songTitle, setSongTitle] = useState('');
-  const [artist, setArtist] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingTrackId, setGeneratingTrackId] = useState<number | null>(
+    null
+  );
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false);
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
 
@@ -113,20 +118,50 @@ function LibraryPage() {
     error,
   } = useCollection<Song>(songsRef);
 
-  const handleGenerateSong = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (
-      !songTitle ||
-      !artist ||
-      !user ||
-      !firestore ||
-      !userProfileRef ||
-      !userProfile
-    ) {
+  // Debounce iTunes Search
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    const debounceTimer = setTimeout(async () => {
+      try {
+        const searchTerm = encodeURIComponent(searchQuery);
+        const response = await fetch(
+          `https://itunes.apple.com/search?term=${searchTerm}&entity=song&limit=10`
+        );
+        const data = await response.json();
+        setSearchResults(data.results || []);
+      } catch (error) {
+        console.error('iTunes search failed:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Suche fehlgeschlagen',
+          description: 'Die Suche nach Songs bei iTunes ist fehlgeschlagen.',
+        });
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(debounceTimer);
+  }, [searchQuery, toast]);
+
+  const handleGenerateSong = async (
+    title: string,
+    artist: string,
+    trackId: number
+  ) => {
+    if (isGenerating) return;
+
+    if (!user || !firestore || !userProfileRef || !userProfile) {
       toast({
         variant: 'destructive',
         title: 'Fehlende Informationen',
-        description: 'Bitte geben Sie Songtitel und Künstler an.',
+        description: 'Bitte zuerst anmelden.',
       });
       return;
     }
@@ -165,6 +200,7 @@ function LibraryPage() {
     }
 
     setIsGenerating(true);
+    setGeneratingTrackId(trackId);
     try {
       const {
         songtitle,
@@ -172,7 +208,7 @@ function LibraryPage() {
         sheet,
         artworkUrl,
       } = await generateSongSheet({
-        title: songTitle,
+        title,
         artist,
       });
 
@@ -208,8 +244,8 @@ function LibraryPage() {
         title: 'Song-Sheet generiert & gespeichert',
         description: `"${songtitle}" von ${songArtist} wurde zur Bibliothek hinzugefügt.`,
       });
-      setSongTitle('');
-      setArtist('');
+      setSearchQuery('');
+      setSearchResults([]);
     } catch (error: any) {
       console.error('Processing Error: ', error);
       toast({
@@ -220,6 +256,7 @@ function LibraryPage() {
       });
     } finally {
       setIsGenerating(false);
+      setGeneratingTrackId(null);
     }
   };
 
@@ -227,7 +264,9 @@ function LibraryPage() {
     if (
       !firestore ||
       !user ||
-      (user.uid !== songToDelete.userId && userProfile?.role !== 'admin' && userProfile?.role !== 'superadmin')
+      (user.uid !== songToDelete.userId &&
+        userProfile?.role !== 'admin' &&
+        userProfile?.role !== 'superadmin')
     )
       return;
     try {
@@ -411,12 +450,12 @@ function LibraryPage() {
           <Card className="mb-8">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <PlusCircle />
+                <Sparkles />
                 Neuen Song generieren
               </CardTitle>
               <CardDescription>
-                Geben Sie einen Songtitel und Künstler an. Unsere KI generiert
-                automatisch ein Song-Sheet mit Text und Akkorden.
+                Suche nach einem Song und wähle ihn aus der Liste aus, um ein
+                Song-Sheet zu erstellen.
                 {userProfile?.role === 'creator' &&
                   ` (${
                     5 -
@@ -428,46 +467,77 @@ function LibraryPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleGenerateSong} className="space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="song-title">Songtitel</Label>
-                    <Input
-                      id="song-title"
-                      placeholder="z.B. Über den Wolken"
-                      value={songTitle}
-                      onChange={(e) => setSongTitle(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="artist">Künstler</Label>
-                    <Input
-                      id="artist"
-                      placeholder="z.B. Reinhard Mey"
-                      value={artist}
-                      onChange={(e) => setArtist(e.target.value)}
-                      required
-                    />
-                  </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="song-search">Song-Suche</Label>
+                  <Input
+                    id="song-search"
+                    placeholder="z.B. Über den Wolken, Reinhard Mey"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
-                <Button
-                  type="submit"
-                  disabled={isGenerating || !songTitle || !artist}
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Wird generiert...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2" />
-                      Song-Sheet generieren
-                    </>
+
+                {isSearching && (
+                  <div className="flex items-center justify-center p-4">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                )}
+
+                {!isSearching && searchResults.length > 0 && (
+                  <div className="border rounded-md max-h-72 overflow-y-auto">
+                    <ul className="divide-y">
+                      {searchResults.map((track) => (
+                        <li key={track.trackId}>
+                          <button
+                            className="w-full text-left p-3 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
+                            onClick={() =>
+                              handleGenerateSong(
+                                track.trackName,
+                                track.artistName,
+                                track.trackId
+                              )
+                            }
+                            disabled={isGenerating}
+                          >
+                            <Image
+                              src={track.artworkUrl100.replace(
+                                '100x100',
+                                '60x60'
+                              )}
+                              alt={track.trackName}
+                              width={60}
+                              height={60}
+                              className="rounded-md"
+                            />
+                            <div className="flex-1 overflow-hidden">
+                              <div className="font-semibold truncate">
+                                {track.trackName}
+                              </div>
+                              <div className="text-sm text-muted-foreground truncate">
+                                {track.artistName}
+                              </div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {track.collectionName}
+                              </div>
+                            </div>
+                            {generatingTrackId === track.trackId && (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            )}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {!isSearching &&
+                  searchQuery &&
+                  searchResults.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center p-4">
+                      Keine Ergebnisse gefunden.
+                    </p>
                   )}
-                </Button>
-              </form>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -573,7 +643,8 @@ function LibraryPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {(user?.uid === songItem.userId ||
-                          userProfile?.role === 'admin' || userProfile?.role === 'superadmin') && (
+                          userProfile?.role === 'admin' ||
+                          userProfile?.role === 'superadmin') && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="ghost" size="icon">

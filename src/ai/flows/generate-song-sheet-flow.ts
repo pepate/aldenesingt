@@ -82,7 +82,7 @@ Artist: {{artist}}
 The exact lyrics for the song are provided below. Your task is to:
 1.  Use the provided lyrics VERBATIM. Do not change, add, or remove a single word. Structure them into parts (verse, chorus, etc.) as appropriate.
 2.  Add the correct chords for each line of text. The chords must be precisely aligned above the corresponding syllables of the lyrics. Use spaces to ensure perfect alignment for musicians. If a line contains no chords, the 'chords' field must be an empty string.
-3.  Fill out the other metadata fields (releaseDate, genre, key) with accurate information based on the song.
+3.  Fill out the other metadata fields (releaseDate, genre, key) with accurate information based on the song. It is crucial that you correctly identify the song's original key.
 
 Provided Lyrics:
 ---
@@ -96,7 +96,7 @@ Please provide the following information:
 - artist: The name of the original recording artist.
 - sheet.releaseDate: The year the song was originally released.
 - sheet.genre: The primary genre of the song (e.g., "Liedermacher", "Pop", "Rock").
-- sheet.key: The original musical key of the song (e.g., "G-Dur", "A-Moll").
+- sheet.key: It is crucial that you accurately identify and provide the original musical key of the song (e.g., "G-Dur", "A-Moll"). Your accuracy on this point is paramount.
 - sheet.song: An array of the song's parts. Each part must have:
   - part: The name of the section (e.g., "Strophe 1", "Refrain", "Bridge", "Gitarrensolo"). Use German terms.
   - lines: An array of lines. Each line object must contain:
