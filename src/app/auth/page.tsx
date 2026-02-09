@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   getAuth,
-  signInAnonymously,
   GoogleAuthProvider,
   signInWithPopup,
   createUserWithEmailAndPassword,
@@ -27,7 +26,7 @@ import {
 } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, User as UserIcon, Shield } from 'lucide-react';
+import { Loader2, User as UserIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 function AuthPage() {
@@ -55,19 +54,6 @@ function AuthPage() {
         variant: 'destructive',
         title: 'Anmeldung fehlgeschlagen',
         description: 'Mit Google konnte nicht angemeldet werden.',
-      });
-    }
-  };
-
-  const handleAnonymousSignIn = async () => {
-    try {
-      await signInAnonymously(auth);
-    } catch (error) {
-      console.error('Error during anonymous sign-in:', error);
-       toast({
-        variant: 'destructive',
-        title: 'Anmeldung fehlgeschlagen',
-        description: 'Die anonyme Anmeldung ist fehlgeschlagen.',
       });
     }
   };
@@ -148,9 +134,6 @@ function AuthPage() {
               </div>
               <Button className="w-full" variant="outline" onClick={handleGoogleSignIn}>
                 <UserIcon className="mr-2" /> Mit Google anmelden
-              </Button>
-              <Button variant="secondary" className="w-full" onClick={handleAnonymousSignIn}>
-                <Shield className="mr-2" /> Anonym anmelden
               </Button>
             </CardContent>
           </Card>

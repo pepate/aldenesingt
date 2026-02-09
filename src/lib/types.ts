@@ -18,3 +18,12 @@ export type PdfDocument = {
   createdAt: any;
   storagePath: string;
 };
+
+export type SessionParticipant = {
+  id: string;
+  userId: string;
+  sessionId: string;
+  joinedAt: any;
+  displayName: string | null;
+  photoURL: string | null;
+};

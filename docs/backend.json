@@ -101,7 +101,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "The unique identifier for the participant entry."
+          "description": "The unique identifier for the participant entry, usually the user's UID."
         },
         "userId": {
           "type": "string",
@@ -110,6 +110,15 @@
         "sessionId": {
           "type": "string",
           "description": "The ID of the session they joined."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The display name of the user who joined."
+        },
+        "photoURL": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the participant's profile picture."
         },
         "joinedAt": {
           "type": "string",
@@ -121,7 +130,7 @@
     }
   },
   "auth": {
-    "providers": ["anonymous", "google.com", "password"]
+    "providers": ["google.com", "password"]
   },
   "firestore": {
     "/users/{userId}": {

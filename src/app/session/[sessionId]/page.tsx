@@ -12,6 +12,7 @@ import {
   Loader2,
   AlertTriangle,
   Library,
+  Users,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -24,15 +25,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { FirebaseClientProvider } from '@/firebase/client-provider';
 import {
-  useDoc,
-  useUser,
-  useCollection,
-  useFirebase,
-} from '@/firebase';
-import type { Session, PdfDocument } from '@/lib/types';
-import { doc, updateDoc, collection } from 'firebase/firestore';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { useDoc, useUser, useCollection, useFirebase } from '@/firebase';
+import type { Session, PdfDocument, SessionParticipant } from '@/lib/types';
+import {
+  doc,
+  updateDoc,
+  collection,
+  setDoc,
+  deleteDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
 
 function SessionPageContent() {
   const params = useParams();
@@ -51,6 +60,9 @@ function SessionPageContent() {
     loading: sessionLoading,
     error: sessionError,
   } = useDoc<Session>(sessionRef);
+  
+  const participantsRef = firestore ? collection(firestore, 'sessions', sessionId, 'sessionParticipants') : null;
+  const { data: participants, loading: participantsLoading } = useCollection<SessionParticipant>(participantsRef);
 
   const isHost = session?.hostId === user?.uid;
 
@@ -86,6 +98,25 @@ function SessionPageContent() {
     }
   }, [session, userDocuments]);
 
+  // Effect to join/leave session
+  useEffect(() => {
+    if (!user || !firestore || !sessionId) return;
+
+    const participantRef = doc(firestore, 'sessions', sessionId, 'sessionParticipants', user.uid);
+
+    setDoc(participantRef, {
+        userId: user.uid,
+        sessionId: sessionId,
+        joinedAt: serverTimestamp(),
+        displayName: user.displayName,
+        photoURL: user.photoURL
+    });
+    
+    return () => {
+        deleteDoc(participantRef);
+    };
+  }, [user, firestore, sessionId]);
+
   const handleSongChange = async (newSongId: string) => {
     if (!sessionRef || !isHost) return;
 
@@ -115,7 +146,7 @@ function SessionPageContent() {
     }
   };
 
-  if (sessionLoading || docsLoading) {
+  if (sessionLoading || docsLoading || participantsLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -183,6 +214,41 @@ function SessionPageContent() {
             <Library className="mr-2 h-4 w-4" />
             Bibliothek
           </Button>
+
+           <Popover>
+            <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                    <Users className="h-5 w-5" />
+                    {participants && participants.length > 0 && (
+                        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">
+                            {participants.length}
+                        </span>
+                    )}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64">
+                <div className="font-bold mb-2">Aktive Nutzer ({participants?.length || 0})</div>
+                <ul className="space-y-3 max-h-60 overflow-y-auto">
+                    {participantsLoading ? (
+                        <li><Loader2 className="h-4 w-4 animate-spin" /></li>
+                    ) : (
+                        participants?.map((p) => (
+                            <li key={p.id} className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                    {p.photoURL && <AvatarImage src={p.photoURL} alt={p.displayName || ''} />}
+                                    <AvatarFallback>{p.displayName ? p.displayName.charAt(0).toUpperCase() : 'A'}</AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm truncate">{p.displayName || 'Anonymer Nutzer'}</span>
+                            </li>
+                        ))
+                    )}
+                    {(!participantsLoading && participants?.length === 0) && (
+                        <p className="text-sm text-muted-foreground">Niemand sonst ist hier.</p>
+                    )}
+                </ul>
+            </PopoverContent>
+        </Popover>
+
           <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-muted-foreground">
             {isHost ? (
               <Crown className="h-5 w-5 text-amber-400" />
