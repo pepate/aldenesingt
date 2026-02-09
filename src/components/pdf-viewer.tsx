@@ -13,7 +13,7 @@ interface PdfViewerProps {
   initialScroll: number;
 }
 
-const DEBOUNCE_TIME = 200; // ms
+const DEBOUNCE_TIME = 200;
 
 export default function PdfViewer({
   songUrl,
@@ -24,26 +24,22 @@ export default function PdfViewer({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isUpdatingByListener = useRef(false);
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
-  const [pdfKey, setPdfKey] = useState(songUrl);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Update PDF when URL changes
+  // By changing the key, we force the iframe to re-mount and load the new URL.
+  const [pdfKey, setPdfKey] = useState(songUrl);
   useEffect(() => {
-    setIsLoading(true);
     setPdfKey(songUrl);
     if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = 0;
+      scrollContainerRef.current.scrollTop = 0;
     }
   }, [songUrl]);
 
   const sendScrollUpdate = useCallback(
-    async (scrollTop: number) => {
+    (scrollTop: number) => {
       if (sessionRef) {
-        try {
-          await updateDoc(sessionRef, { scroll: scrollTop });
-        } catch (error) {
+        updateDoc(sessionRef, { scroll: scrollTop }).catch((error) => {
           console.error('Failed to send scroll update:', error);
-        }
+        });
       }
     },
     [sessionRef]
@@ -66,22 +62,17 @@ export default function PdfViewer({
       isUpdatingByListener.current = false;
       return;
     }
-    const scrollTop = e.currentTarget.scrollTop;
-    debouncedSendScroll(scrollTop);
+    debouncedSendScroll(e.currentTarget.scrollTop);
   };
 
-  // Set up Firestore listener for scroll changes
+  // Listener for non-hosts
   useEffect(() => {
     if (isHost || !sessionRef) return;
 
     const unsubscribe = onSnapshot(sessionRef, (doc) => {
       const newScroll = doc.data()?.scroll;
       const container = scrollContainerRef.current;
-      if (
-        container &&
-        newScroll !== undefined &&
-        Math.abs(container.scrollTop - newScroll) > 5
-      ) {
+      if (container && newScroll !== undefined && Math.abs(container.scrollTop - newScroll) > 10) {
         isUpdatingByListener.current = true;
         container.scrollTo({ top: newScroll, behavior: 'smooth' });
       }
@@ -90,22 +81,17 @@ export default function PdfViewer({
     return () => unsubscribe();
   }, [isHost, sessionRef]);
 
-  // Set initial scroll position
+  // Set initial scroll
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = initialScroll;
     }
   }, [initialScroll, pdfKey]);
 
-
-  const onPdfLoad = () => {
-    setIsLoading(false);
-  }
-
   return (
     <div
       ref={scrollContainerRef}
-      className="h-full w-full overflow-y-auto"
+      className="h-full w-full overflow-y-auto bg-muted"
       onScroll={isHost ? handleScroll : undefined}
       style={{
         WebkitOverflowScrolling: 'touch',
@@ -113,21 +99,16 @@ export default function PdfViewer({
         scrollbarColor: 'hsl(var(--primary)) hsl(var(--background))',
       }}
     >
-      <div className="relative w-full min-h-full">
-        {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center z-20 bg-background">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="ml-2 text-muted-foreground">Dokument wird geladen...</p>
-            </div>
-        )}
+      <div className="w-full relative" style={{ height: '500vh' }}>
+        <div className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
         <iframe
           key={pdfKey}
-          src={`${songUrl}#toolbar=0&navpanes=0`}
+          src={songUrl ? `${songUrl}#toolbar=0&navpanes=0` : ''}
           title="PDF-Dokument"
           frameBorder="0"
-          className="w-full relative z-10"
-          style={{ height: '500vh' }}
-          onLoad={onPdfLoad}
+          className="w-full h-full absolute top-0 left-0 z-10"
         />
       </div>
     </div>
