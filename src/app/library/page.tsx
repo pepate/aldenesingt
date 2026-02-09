@@ -11,6 +11,7 @@ import {
   Share2,
   Library as LibraryIcon,
   Sparkles,
+  Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -54,6 +55,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { UserNav } from '@/components/user-nav';
 import { extractSongFromPdf } from '@/ai/flows/extract-song-flow';
+import { extractSongFromUrl } from '@/ai/flows/extract-song-from-url-flow';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 
 function LibraryPage() {
   const { user, loading: userLoading } = useUser();
@@ -63,6 +71,8 @@ function LibraryPage() {
 
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [url, setUrl] = useState('');
+  const [isImportingUrl, setIsImportingUrl] = useState(false);
 
   const songsRef = useMemoFirebase(
     () => (firestore ? collection(firestore, 'songs') : null),
@@ -112,7 +122,9 @@ function LibraryPage() {
         const extractedData = await extractSongFromPdf({ pdfDataUri });
 
         if (!extractedData || !extractedData.content) {
-            throw new Error("Die KI konnte keinen Inhalt aus der PDF extrahieren.");
+          throw new Error(
+            'Die KI konnte keinen Inhalt aus der PDF extrahieren.'
+          );
         }
 
         // 3. Upload original PDF to storage for reference
@@ -136,10 +148,9 @@ function LibraryPage() {
         setFile(null);
       };
       reader.onerror = (error) => {
-        console.error("FileReader Error: ", error);
-        throw new Error("Fehler beim Lesen der Datei.");
-      }
-
+        console.error('FileReader Error: ', error);
+        throw new Error('Fehler beim Lesen der Datei.');
+      };
     } catch (error: any) {
       console.error('Processing Error: ', error);
       toast({
@@ -151,6 +162,54 @@ function LibraryPage() {
       });
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleImportFromUrl = async () => {
+    if (!url || !user || !firestore || !songsRef) {
+      toast({
+        variant: 'destructive',
+        title: 'Fehlende Informationen',
+        description: 'Bitte geben Sie eine gültige URL ein.',
+      });
+      return;
+    }
+
+    setIsImportingUrl(true);
+    try {
+      // Call Genkit flow to extract content from URL
+      const extractedData = await extractSongFromUrl({ url });
+
+      if (!extractedData || !extractedData.content) {
+        throw new Error(
+          'Die KI konnte keinen Inhalt von der Webseite extrahieren.'
+        );
+      }
+
+      // Save extracted content to Firestore
+      await addDoc(songsRef, {
+        userId: user.uid,
+        title: extractedData.title,
+        content: extractedData.content,
+        // No storagePath for URL imports
+        createdAt: serverTimestamp(),
+      });
+
+      toast({
+        title: 'Song importiert & gespeichert',
+        description: `"${extractedData.title}" wurde zur Bibliothek hinzugefügt.`,
+      });
+      setUrl(''); // Clear the input
+    } catch (error: any) {
+      console.error('URL Import Error: ', error);
+      toast({
+        variant: 'destructive',
+        title: 'Import fehlgeschlagen',
+        description:
+          error.message || 'Der Song konnte nicht von der URL importiert werden.',
+      });
+    } finally {
+      setIsImportingUrl(false);
     }
   };
 
@@ -251,33 +310,71 @@ function LibraryPage() {
               Neuen Song hinzufügen
             </CardTitle>
             <CardDescription>
-              Laden Sie eine PDF-Datei hoch. Unsere KI extrahiert automatisch
-              Text und Akkorde.
+              Laden Sie eine PDF-Datei hoch oder importieren Sie von einer
+              Webseite. Unsere KI extrahiert automatisch Text und Akkorde.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Input
-              type="file"
-              accept="application/pdf"
-              onChange={handleFileChange}
-              className="file:text-primary file:font-semibold"
-            />
-            <Button
-              onClick={handleProcessAndUpload}
-              disabled={isProcessing || !file}
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Wird verarbeitet...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="mr-2" />
-                  Extrahieren & Hochladen
-                </>
-              )}
-            </Button>
+          <CardContent>
+            <Tabs defaultValue="pdf" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="pdf">
+                  <Upload className="mr-2 h-4 w-4" />
+                  PDF-Datei
+                </TabsTrigger>
+                <TabsTrigger value="url">
+                  <Globe className="mr-2 h-4 w-4" />
+                  Webseite
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="pdf" className="pt-4 space-y-4">
+                <Input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileChange}
+                  className="file:text-primary file:font-semibold"
+                />
+                <Button
+                  onClick={handleProcessAndUpload}
+                  disabled={isProcessing || !file}
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Wird verarbeitet...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2" />
+                      Extrahieren & Hochladen
+                    </>
+                  )}
+                </Button>
+              </TabsContent>
+              <TabsContent value="url" className="pt-4 space-y-4">
+                <Input
+                  type="url"
+                  placeholder="https://www.ultimate-guitar.com/..."
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                />
+                <Button
+                  onClick={handleImportFromUrl}
+                  disabled={isImportingUrl || !url}
+                >
+                  {isImportingUrl ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Wird importiert...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2" />
+                      Extrahieren & Importieren
+                    </>
+                  )}
+                </Button>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 
@@ -306,12 +403,14 @@ function LibraryPage() {
             {songs?.map((songItem) => (
               <Card key={songItem.id} className="flex flex-col">
                 <CardHeader className="flex-row items-start gap-4 space-y-0">
-                    <div className='flex items-center justify-center h-12 w-12 rounded-lg bg-primary/10'>
-                        <Music className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                        <CardTitle className="truncate text-lg">{songItem.title}</CardTitle>
-                    </div>
+                  <div className="flex items-center justify-center h-12 w-12 rounded-lg bg-primary/10">
+                    <Music className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <CardTitle className="truncate text-lg">
+                      {songItem.title}
+                    </CardTitle>
+                  </div>
                 </CardHeader>
                 <CardContent className="flex-grow"></CardContent>
                 <CardFooter className="flex justify-between items-center gap-2">

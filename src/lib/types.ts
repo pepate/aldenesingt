@@ -4,7 +4,7 @@ export type Song = {
   content: string;
   userId: string;
   createdAt: any;
-  storagePath: string;
+  storagePath?: string;
 };
 
 export type Session = {
