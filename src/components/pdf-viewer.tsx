@@ -1,104 +1,112 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { DocumentReference, onSnapshot, updateDoc } from 'firebase/firestore';
+import type { Session } from '@/lib/types';
 
 interface PdfViewerProps {
   songUrl: string;
   sessionId: string;
   isHost: boolean;
+  sessionRef: DocumentReference<Session> | null;
+  initialScroll: number;
 }
 
-const POLLING_INTERVAL = 300; // ms
-const DEBOUNCE_TIME = 100; // ms
+const DEBOUNCE_TIME = 200; // ms
 
 export default function PdfViewer({
   songUrl,
-  sessionId,
   isHost,
+  sessionRef,
+  initialScroll,
 }: PdfViewerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const lastSentScroll = useRef(0);
-  const isUpdatingByPoll = useRef(false);
+  const isUpdatingByListener = useRef(false);
+  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [pdfKey, setPdfKey] = useState(songUrl);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Debounce function to limit API calls on scroll
-  const debounce = (func: (...args: any[]) => void, delay: number) => {
-    let timeoutId: NodeJS.Timeout;
-    return (...args: any[]) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        func(...args);
-      }, delay);
-    };
-  };
+  // Update PDF when URL changes
+  useEffect(() => {
+    setIsLoading(true);
+    setPdfKey(songUrl);
+    if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [songUrl]);
 
   const sendScrollUpdate = useCallback(
     async (scrollTop: number) => {
-      if (Math.abs(scrollTop - lastSentScroll.current) < 10) return; // Don't send minor changes
-      lastSentScroll.current = scrollTop;
-      try {
-        await fetch(`/api/session/${sessionId}/scroll`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scroll: scrollTop }),
-        });
-      } catch (error) {
-        console.error('Failed to send scroll update:', error);
+      if (sessionRef) {
+        try {
+          await updateDoc(sessionRef, { scroll: scrollTop });
+        } catch (error) {
+          console.error('Failed to send scroll update:', error);
+        }
       }
     },
-    [sessionId]
+    [sessionRef]
   );
 
-  const debouncedSendScroll = useCallback(debounce(sendScrollUpdate, DEBOUNCE_TIME), [sendScrollUpdate]);
+  const debouncedSendScroll = useCallback(
+    (scrollTop: number) => {
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+      }
+      debounceTimeout.current = setTimeout(() => {
+        sendScrollUpdate(scrollTop);
+      }, DEBOUNCE_TIME);
+    },
+    [sendScrollUpdate]
+  );
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (isUpdatingByPoll.current) {
-        // This scroll was triggered by a poll update, so we don't send it back to the server
-        isUpdatingByPoll.current = false;
-        return;
+    if (isUpdatingByListener.current) {
+      isUpdatingByListener.current = false;
+      return;
     }
     const scrollTop = e.currentTarget.scrollTop;
     debouncedSendScroll(scrollTop);
   };
 
+  // Set up Firestore listener for scroll changes
   useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
+    if (isHost || !sessionRef) return;
 
-    if (isHost) {
-      container.addEventListener('scroll', handleScroll as any);
-      return () => container.removeEventListener('scroll', handleScroll as any);
-    }
-  }, [isHost, handleScroll]);
-
-  useEffect(() => {
-    if (isHost) return;
-
-    const pollScrollPosition = async () => {
-      try {
-        const response = await fetch(`/api/session/${sessionId}/scroll`);
-        if (!response.ok) return;
-
-        const { scroll: newScroll } = await response.json();
-        const container = scrollContainerRef.current;
-        if (container && Math.abs(container.scrollTop - newScroll) > 5) {
-            isUpdatingByPoll.current = true;
-            container.scrollTo({ top: newScroll, behavior: 'smooth' });
-        }
-      } catch (error) {
-        console.error('Failed to poll scroll position:', error);
+    const unsubscribe = onSnapshot(sessionRef, (doc) => {
+      const newScroll = doc.data()?.scroll;
+      const container = scrollContainerRef.current;
+      if (
+        container &&
+        newScroll !== undefined &&
+        Math.abs(container.scrollTop - newScroll) > 5
+      ) {
+        isUpdatingByListener.current = true;
+        container.scrollTo({ top: newScroll, behavior: 'smooth' });
       }
-    };
+    });
 
-    const intervalId = setInterval(pollScrollPosition, POLLING_INTERVAL);
+    return () => unsubscribe();
+  }, [isHost, sessionRef]);
 
-    return () => clearInterval(intervalId);
-  }, [isHost, sessionId]);
+  // Set initial scroll position
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = initialScroll;
+    }
+  }, [initialScroll, pdfKey]);
+
+
+  const onPdfLoad = () => {
+    setIsLoading(false);
+  }
 
   return (
     <div
       ref={scrollContainerRef}
       className="h-full w-full overflow-y-auto"
+      onScroll={isHost ? handleScroll : undefined}
       style={{
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'thin',
@@ -106,15 +114,19 @@ export default function PdfViewer({
       }}
     >
       <div className="relative w-full h-full">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="ml-2 text-muted-foreground">Dokument wird geladen...</p>
-        </div>
+        {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center z-20 bg-background">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <p className="ml-2 text-muted-foreground">Dokument wird geladen...</p>
+            </div>
+        )}
         <embed
+          key={pdfKey}
           src={`${songUrl}#toolbar=0&navpanes=0`}
           type="application/pdf"
           className="w-full relative z-10"
-          style={{ height: '500vh' }} // Arbitrarily large height to ensure container scrolls
+          style={{ height: '500vh' }}
+          onLoad={onPdfLoad}
         />
       </div>
     </div>

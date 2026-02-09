@@ -1,0 +1,158 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Represents a user's profile information.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique identifier for the user, matching their auth UID."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's display name."
+        },
+        "photoURL": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the user's profile picture."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the user profile was created."
+        }
+      },
+      "required": ["id", "email"]
+    },
+    "PdfDocument": {
+      "title": "PDF Document",
+      "description": "Represents a PDF document uploaded by a user.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique identifier for the document."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who uploaded the document."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the document."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "The public URL to access the PDF file in Firebase Storage."
+        },
+        "storagePath": {
+          "type": "string",
+          "description": "The path to the file in Firebase Storage."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the document was uploaded."
+        }
+      },
+      "required": ["id", "userId", "title", "url", "storagePath", "createdAt"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Represents a synchronized viewing session.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique identifier for the session."
+        },
+        "hostId": {
+          "type": "string",
+          "description": "The user ID of the session host."
+        },
+        "songId": {
+          "type": "string",
+          "description": "The ID of the PDF document being viewed."
+        },
+        "scroll": {
+          "type": "number",
+          "description": "The current scroll position of the document."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the session was created."
+        }
+      },
+      "required": ["id", "hostId", "songId", "scroll", "createdAt"]
+    },
+    "SessionParticipant": {
+      "title": "Session Participant",
+      "description": "Represents a user who has joined a session.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique identifier for the participant entry."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who joined."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "The ID of the session they joined."
+        },
+        "joinedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the user joined the session."
+        }
+      },
+      "required": ["id", "userId", "sessionId", "joinedAt"]
+    }
+  },
+  "auth": {
+    "providers": ["anonymous"]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Stores public profiles for all users."
+    },
+    "/users/{userId}/pdf_documents/{pdfDocumentId}": {
+      "schema": {
+        "$ref": "#/entities/PdfDocument"
+      },
+      "description": "A user's private collection of PDF documents."
+    },
+    "/pdf_documents/{pdfDocumentId}": {
+      "schema": {
+        "$ref": "#/entities/PdfDocument"
+      },
+      "description": "A top-level collection for publicly readable documents."
+    },
+    "/sessions/{sessionId}": {
+      "schema": {
+        "$ref": "#/entities/Session"
+      },
+      "description": "Contains data for a single collaborative session."
+    },
+    "/sessions/{sessionId}/sessionParticipants/{sessionParticipantId}": {
+      "schema": {
+        "$ref": "#/entities/SessionParticipant"
+      },
+      "description": "A subcollection tracking users who have joined a session."
+    }
+  }
+}
