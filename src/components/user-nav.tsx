@@ -99,7 +99,7 @@ export function UserNav() {
                 {canSeeLibrary && (
                     <DropdownMenuItem onClick={() => router.push('/library')}>
                         <Library className="mr-2 h-4 w-4" />
-                        <span>Bibliothek</span>
+                        <span>Songs</span>
                     </DropdownMenuItem>
                 )}
                 {canSeeAdmin && (

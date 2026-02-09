@@ -317,7 +317,7 @@ function HomeComponent() {
             <>
               <Button variant="ghost" onClick={() => router.push('/library')}>
                 <Library className="mr-2" />
-                Meine Bibliothek
+                Songs
               </Button>
               <Dialog
                 open={isSessionDialogOpen}

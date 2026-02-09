@@ -159,7 +159,7 @@ function SongPageContent() {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center justify-end flex-wrap gap-x-2 sm:gap-x-4 gap-y-2">
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5">
               <Switch

@@ -403,7 +403,7 @@ function LibraryPage() {
           onClick={() => router.push('/')}
         >
           <LibraryIcon className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">Bibliothek</h1>
+          <h1 className="text-3xl font-bold text-foreground">Songs</h1>
         </div>
         <div className="flex items-center gap-4">
           {canGenerate && (
