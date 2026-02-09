@@ -4,7 +4,7 @@ import type { Session } from '@/lib/types';
 const sessions = new Map<string, Session>();
 
 export const createSession = (songId: string): string => {
-  const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const sessionId = Math.random().toString(36).substring(2, 5).toUpperCase();
   // Avoid collision, though unlikely
   if (sessions.has(sessionId)) {
     return createSession(songId);

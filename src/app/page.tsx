@@ -151,9 +151,10 @@ export default function Home() {
                 <Input
                   placeholder="Enter Session ID"
                   value={sessionId}
-                  onChange={(e) => setSessionId(e.target.value)}
+                  onChange={(e) => setSessionId(e.target.value.toUpperCase())}
                   onKeyUp={(e) => e.key === 'Enter' && handleJoinSession()}
                   className="uppercase"
+                  maxLength={3}
                 />
               </CardContent>
               <CardFooter>
