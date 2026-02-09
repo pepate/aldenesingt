@@ -46,9 +46,9 @@ function SessionPageContent() {
         const response = await fetch(`/api/session/${sessionId}`);
         if (!response.ok) {
           if (response.status === 404) {
-            throw new Error('Session not found. Please check the ID and try again.');
+            throw new Error('Sitzung nicht gefunden. Bitte überprüfe die ID und versuche es erneut.');
           }
-          throw new Error('Failed to load session data.');
+          throw new Error('Laden der Sitzungsdaten fehlgeschlagen.');
         }
         const data = await response.json();
         setSessionData(data);
@@ -56,7 +56,7 @@ function SessionPageContent() {
         setError(err.message);
         toast({
           variant: 'destructive',
-          title: 'Error',
+          title: 'Fehler',
           description: err.message,
         });
         setTimeout(() => router.push('/'), 3000);
@@ -71,8 +71,8 @@ function SessionPageContent() {
   const copySessionId = () => {
     navigator.clipboard.writeText(sessionId);
     toast({
-      title: 'Copied!',
-      description: 'Session ID has been copied to your clipboard.',
+      title: 'Kopiert!',
+      description: 'Sitzungs-ID wurde in die Zwischenablage kopiert.',
     });
   };
 
@@ -80,7 +80,7 @@ function SessionPageContent() {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Loading session...</p>
+        <p className="mt-4 text-muted-foreground">Sitzung wird geladen...</p>
       </div>
     );
   }
@@ -91,7 +91,7 @@ function SessionPageContent() {
         <AlertTriangle className="h-12 w-12" />
         <h2 className="mt-4 text-2xl font-bold">{error}</h2>
         <p className="mt-2 text-muted-foreground">
-          Redirecting to homepage...
+          Weiterleitung zur Startseite...
         </p>
       </div>
     );
@@ -104,7 +104,7 @@ function SessionPageContent() {
           <Button variant="outline" size="icon" asChild>
             <Link href="/">
               <ArrowLeft />
-              <span className="sr-only">Back to Home</span>
+              <span className="sr-only">Zurück zur Startseite</span>
             </Link>
           </Button>
           <div className="flex items-center gap-2">
@@ -122,7 +122,7 @@ function SessionPageContent() {
               <User className="h-5 w-5" />
             )}
             <span className="font-mono text-sm font-semibold">
-              {isHost ? 'HOST' : 'VIEWER'}
+              {isHost ? 'HOST' : 'ZUSCHAUER'}
             </span>
           </div>
           <div className="flex items-center gap-1 rounded-md border p-2">
@@ -131,7 +131,7 @@ function SessionPageContent() {
             </span>
             <Button variant="ghost" size="icon" onClick={copySessionId} className='h-7 w-7'>
               <Copy className="h-4 w-4" />
-              <span className="sr-only">Copy Session ID</span>
+              <span className="sr-only">Sitzungs-ID kopieren</span>
             </Button>
           </div>
         </div>
@@ -155,7 +155,7 @@ export default function SessionPage() {
       fallback={
         <div className="flex flex-col items-center justify-center h-screen">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="mt-4 text-muted-foreground">Loading...</p>
+          <p className="mt-4 text-muted-foreground">Wird geladen...</p>
         </div>
       }
     >

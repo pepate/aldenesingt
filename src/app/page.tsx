@@ -36,8 +36,8 @@ export default function Home() {
     if (!selectedSong) {
       toast({
         variant: 'destructive',
-        title: 'No Song Selected',
-        description: 'Please select a song to start a session.',
+        title: 'Kein Lied ausgewählt',
+        description: 'Bitte wähle ein Lied aus, um eine Sitzung zu starten.',
       });
       return;
     }
@@ -59,8 +59,8 @@ export default function Home() {
     } catch (error) {
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'Could not create a new session. Please try again.',
+        title: 'Fehler',
+        description: 'Konnte keine neue Sitzung erstellen. Bitte versuche es erneut.',
       });
       setIsCreating(false);
     }
@@ -70,8 +70,8 @@ export default function Home() {
     if (!sessionId.trim()) {
       toast({
         variant: 'destructive',
-        title: 'Invalid Session ID',
-        description: 'Please enter a valid session ID.',
+        title: 'Ungültige Sitzungs-ID',
+        description: 'Bitte gib eine gültige Sitzungs-ID ein.',
       });
       return;
     }
@@ -92,11 +92,10 @@ export default function Home() {
         <div className="w-full max-w-4xl mx-auto">
           <div className="text-center mb-10">
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-              Synchronized Sheet Music
+              Synchronisierte Notenblätter
             </h2>
             <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Host a session, share your screen, and let everyone follow along
-              with synchronized scrolling. Perfect for bands and choirs.
+              Starte eine Sitzung, teile deinen Bildschirm und lasse alle mit synchronisiertem Scrollen mitlesen. Perfekt für Bands und Chöre.
             </p>
           </div>
 
@@ -105,16 +104,16 @@ export default function Home() {
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <Upload className="h-6 w-6 text-accent" />
-                  <CardTitle>Start a New Session</CardTitle>
+                  <CardTitle>Neue Sitzung starten</CardTitle>
                 </div>
                 <CardDescription>
-                  Choose a document and become the host.
+                  Wähle ein Dokument und werde zum Host.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-grow">
                 <Select onValueChange={setSelectedSong} value={selectedSong}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a song/document..." />
+                    <SelectValue placeholder="Wähle ein Lied/Dokument..." />
                   </SelectTrigger>
                   <SelectContent>
                     {songs.map((song) => (
@@ -132,7 +131,7 @@ export default function Home() {
                   disabled={isCreating}
                 >
                   <LogIn className="mr-2" />
-                  {isCreating ? 'Starting...' : 'Start Session'}
+                  {isCreating ? 'Wird gestartet...' : 'Sitzung starten'}
                 </Button>
               </CardFooter>
             </Card>
@@ -141,15 +140,15 @@ export default function Home() {
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <Users className="h-6 w-6 text-accent" />
-                  <CardTitle>Join an Existing Session</CardTitle>
+                  <CardTitle>Bestehender Sitzung beitreten</CardTitle>
                 </div>
                 <CardDescription>
-                  Enter a session ID to join and follow along.
+                  Gib eine Sitzungs-ID ein, um beizutreten und mitzulesen.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-grow">
                 <Input
-                  placeholder="Enter Session ID"
+                  placeholder="Sitzungs-ID eingeben"
                   value={sessionId}
                   onChange={(e) => setSessionId(e.target.value.toUpperCase())}
                   onKeyUp={(e) => e.key === 'Enter' && handleJoinSession()}
@@ -165,7 +164,7 @@ export default function Home() {
                   disabled={isJoining}
                 >
                   <Users className="mr-2" />
-                  {isJoining ? 'Joining...' : 'Join Session'}
+                  {isJoining ? 'Tritt bei...' : 'Sitzung beitreten'}
                 </Button>
               </CardFooter>
             </Card>
@@ -173,7 +172,7 @@ export default function Home() {
         </div>
       </main>
       <footer className="p-4 text-center text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} SyncScroll. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} SyncScroll. Alle Rechte vorbehalten.</p>
       </footer>
     </div>
   );

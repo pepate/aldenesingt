@@ -108,7 +108,7 @@ export default function PdfViewer({
       <div className="relative w-full h-full">
         <div className="absolute inset-0 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="ml-2 text-muted-foreground">Loading document...</p>
+          <p className="ml-2 text-muted-foreground">Dokument wird geladen...</p>
         </div>
         <embed
           src={`${songUrl}#toolbar=0&navpanes=0`}
