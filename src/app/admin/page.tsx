@@ -79,21 +79,18 @@ function AdminPage() {
   const authLoading = userLoading || profileLoading;
 
   useEffect(() => {
-    if (authLoading) {
-      return; // Wait until loading is complete
-    }
-
-    const userRole = currentUserProfile?.role;
-    if (userRole !== 'admin' && userRole !== 'superadmin') {
-      toast({
-        variant: 'destructive',
-        title: 'Zugriff verweigert',
-        description: 'Sie haben keine Berechtigung für diese Seite.',
-      });
-      router.push('/');
+    // This effect handles redirection after loading is complete
+    if (!authLoading) {
+      if (!currentUserProfile || (currentUserProfile.role !== 'admin' && currentUserProfile.role !== 'superadmin')) {
+        toast({
+          variant: 'destructive',
+          title: 'Zugriff verweigert',
+          description: 'Sie haben keine Berechtigung für diese Seite.',
+        });
+        router.push('/');
+      }
     }
   }, [authLoading, currentUserProfile, router, toast]);
-
 
   useEffect(() => {
     if (fetchedUsers) {
@@ -140,9 +137,9 @@ function AdminPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  // Show a loader while verifying auth or if the user is not authorized (before redirect)
-  const userRole = currentUserProfile?.role;
-  if (authLoading || (userRole !== 'admin' && userRole !== 'superadmin')) {
+  // This shows a loader while we are loading or before the redirect effect runs.
+  // This prevents the page content from flashing.
+  if (authLoading || !currentUserProfile || (currentUserProfile.role !== 'admin' && currentUserProfile.role !== 'superadmin')) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />

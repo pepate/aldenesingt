@@ -2,7 +2,15 @@
 
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Music, LogIn, Library, Loader2, Users, Trash2 } from 'lucide-react';
+import {
+  Music,
+  LogIn,
+  Library,
+  Loader2,
+  Users,
+  Trash2,
+  Share2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -27,7 +35,13 @@ import type {
   SessionParticipant,
   UserProfile,
 } from '@/lib/types';
-import { collection, doc, deleteDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  deleteDoc,
+  setDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +54,23 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 function SessionCard({
   session,
@@ -183,6 +214,10 @@ function HomeComponent() {
   const router = useRouter();
   const { user, loading: userLoading } = useUser();
   const { firestore } = useFirebase();
+  const { toast } = useToast();
+
+  const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false);
+  const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
 
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -198,13 +233,60 @@ function HomeComponent() {
   const { data: sessions, loading: sessionsLoading } =
     useCollection<Session>(sessionsRef);
 
-  const loading = userLoading || profileLoading || sessionsLoading;
-
-  const showLibrary =
+  const showAdminFeatures =
     userProfile &&
     (userProfile.role === 'creator' ||
       userProfile.role === 'admin' ||
       userProfile.role === 'superadmin');
+
+  const songsCollectionRef = useMemoFirebase(
+    () =>
+      firestore && showAdminFeatures
+        ? collection(firestore, 'songs')
+        : null,
+    [firestore, showAdminFeatures]
+  );
+  const { data: songs, loading: songsLoading } =
+    useCollection<Song>(songsCollectionRef);
+
+  const loading =
+    userLoading ||
+    profileLoading ||
+    sessionsLoading ||
+    (showAdminFeatures && songsLoading);
+
+  const createSession = async (songId: string) => {
+    if (!user || !firestore) return;
+    const sessionId = Math.random().toString(36).substring(2, 6).toUpperCase();
+    try {
+      const sessionCollection = collection(firestore, 'sessions');
+      await setDoc(doc(sessionCollection, sessionId), {
+        id: sessionId,
+        hostId: user.uid,
+        songId: songId,
+        scroll: 0,
+        transpose: 0,
+        createdAt: serverTimestamp(),
+        lastActivity: serverTimestamp(),
+      });
+      router.push(`/session/${sessionId}?host=true`);
+    } catch (error) {
+      console.error('Failed to create session:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Fehler',
+        description: 'Sitzung konnte nicht erstellt werden.',
+      });
+    }
+  };
+
+  const handleStartSession = async () => {
+    if (selectedSongId) {
+      await createSession(selectedSongId);
+      setIsSessionDialogOpen(false);
+      setSelectedSongId(null);
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -214,11 +296,86 @@ function HomeComponent() {
           <h1 className="text-3xl font-bold text-foreground">SyncScroll</h1>
         </div>
         <div className="flex items-center gap-4">
-          {showLibrary && (
-            <Button variant="ghost" onClick={() => router.push('/library')}>
-              <Library className="mr-2" />
-              Meine Bibliothek
-            </Button>
+          {showAdminFeatures && (
+            <>
+              <Button variant="ghost" onClick={() => router.push('/library')}>
+                <Library className="mr-2" />
+                Meine Bibliothek
+              </Button>
+              <Dialog
+                open={isSessionDialogOpen}
+                onOpenChange={setIsSessionDialogOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button>
+                    <Share2 className="mr-2 h-4 w-4" /> Session starten
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Neue Session starten</DialogTitle>
+                    <DialogDescription>
+                      Wählen Sie einen Song aus, um eine neue Live-Sitzung zu
+                      starten.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    {songsLoading ? (
+                      <div className="flex justify-center">
+                        <Loader2 className="animate-spin" />
+                      </div>
+                    ) : (
+                      <Select
+                        onValueChange={setSelectedSongId}
+                        value={selectedSongId || ''}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Wählen Sie einen Song..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {songs?.map((song) => (
+                            <SelectItem key={song.id} value={song.id}>
+                              <div className="flex items-center gap-3">
+                                {song.artworkUrl ? (
+                                  <Image
+                                    src={song.artworkUrl}
+                                    alt={song.title}
+                                    width={24}
+                                    height={24}
+                                    className="rounded-sm object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-6 h-6 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
+                                    <Music className="h-4 w-4" />
+                                  </div>
+                                )}
+                                <span>
+                                  {song.title} - {song.artist}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsSessionDialogOpen(false)}
+                    >
+                      Abbrechen
+                    </Button>
+                    <Button
+                      onClick={handleStartSession}
+                      disabled={!selectedSongId || songsLoading}
+                    >
+                      Session jetzt starten
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
           {user ? (
             <UserNav />
@@ -232,15 +389,6 @@ function HomeComponent() {
       </header>
 
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="text-left mb-10">
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-            Offene Sitzungen
-          </h2>
-          <p className="mt-4 text-lg text-muted-foreground max-w-2xl">
-            Treten Sie einer der Live-Sitzungen bei und spielen Sie gemeinsam.
-          </p>
-        </div>
-
         {loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[...Array(4)].map((_, i) => (
