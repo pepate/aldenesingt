@@ -76,22 +76,28 @@ function AdminPage() {
     error: usersError,
   } = useCollection<UserProfile>(usersRef);
 
+  const authLoading = userLoading || profileLoading;
+
   useEffect(() => {
-    if (!userLoading && !profileLoading) {
-      if (
-        !currentUserProfile ||
-        (currentUserProfile.role !== 'admin' &&
-          currentUserProfile.role !== 'superadmin')
-      ) {
-        toast({
-          variant: 'destructive',
-          title: 'Zugriff verweigert',
-          description: 'Sie haben keine Berechtigung für diese Seite.',
-        });
-        router.push('/');
-      }
+    // Don't run the effect until we have the auth and profile status
+    if (authLoading) {
+      return;
     }
-  }, [user, userLoading, currentUserProfile, profileLoading, router, toast]);
+
+    // If loading is finished and user is not an admin, redirect
+    if (
+      !currentUserProfile ||
+      (currentUserProfile.role !== 'admin' &&
+        currentUserProfile.role !== 'superadmin')
+    ) {
+      toast({
+        variant: 'destructive',
+        title: 'Zugriff verweigert',
+        description: 'Sie haben keine Berechtigung für diese Seite.',
+      });
+      router.push('/');
+    }
+  }, [authLoading, currentUserProfile, router, toast]);
 
   useEffect(() => {
     if (fetchedUsers) {
@@ -138,10 +144,9 @@ function AdminPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  const loading = userLoading || profileLoading || usersLoading;
-
+  // Show a loader while verifying auth or if the user is not authorized (before redirect)
   if (
-    loading ||
+    authLoading ||
     !currentUserProfile ||
     (currentUserProfile.role !== 'admin' &&
       currentUserProfile.role !== 'superadmin')
@@ -181,80 +186,89 @@ function AdminPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {userProfiles.map((userProfile) => (
-                <TableRow key={userProfile.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9">
-                        {userProfile.photoURL && (
-                          <AvatarImage
-                            src={userProfile.photoURL}
-                            alt={userProfile.displayName || ''}
-                          />
-                        )}
-                        <AvatarFallback>
-                          {getInitials(userProfile.displayName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-medium">
-                          {userProfile.displayName || 'Anonymer Benutzer'}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {userProfile.email}
+              {usersLoading &&
+                [...Array(5)].map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell colSpan={4}>
+                      <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              {!usersLoading &&
+                userProfiles.map((userProfile) => (
+                  <TableRow key={userProfile.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9">
+                          {userProfile.photoURL && (
+                            <AvatarImage
+                              src={userProfile.photoURL}
+                              alt={userProfile.displayName || ''}
+                            />
+                          )}
+                          <AvatarFallback>
+                            {getInitials(userProfile.displayName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="font-medium">
+                            {userProfile.displayName || 'Anonymer Benutzer'}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {userProfile.email}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      {React.createElement(
-                        roleConfig[userProfile.role].icon,
-                        {
-                          className: `h-3 w-3`,
-                        }
-                      )}
-                      <span>{roleConfig[userProfile.role].label}</span>
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {userProfile.createdAt?.toDate
-                      ? format(userProfile.createdAt.toDate(), 'PPP', {
-                          locale: de,
-                        })
-                      : '-'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {userProfile.role === 'superadmin' ? (
-                      <span className="text-xs text-muted-foreground">
-                        Nicht änderbar
-                      </span>
-                    ) : (
-                      <Select
-                        defaultValue={userProfile.role}
-                        onValueChange={(newRole) =>
-                          handleRoleChange(
-                            userProfile.id,
-                            newRole as UserProfile['role']
-                          )
-                        }
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className="flex items-center gap-2"
                       >
-                        <SelectTrigger className="w-[120px] h-9">
-                          <SelectValue placeholder="Rolle ändern" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="creator">Creator</SelectItem>
-                          <SelectItem value="user">User</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                        {React.createElement(
+                          roleConfig[userProfile.role].icon,
+                          {
+                            className: `h-3 w-3`,
+                          }
+                        )}
+                        <span>{roleConfig[userProfile.role].label}</span>
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {userProfile.createdAt?.toDate
+                        ? format(userProfile.createdAt.toDate(), 'PPP', {
+                            locale: de,
+                          })
+                        : '-'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {userProfile.role === 'superadmin' ? (
+                        <span className="text-xs text-muted-foreground">
+                          Nicht änderbar
+                        </span>
+                      ) : (
+                        <Select
+                          defaultValue={userProfile.role}
+                          onValueChange={(newRole) =>
+                            handleRoleChange(
+                              userProfile.id,
+                              newRole as UserProfile['role']
+                            )
+                          }
+                        >
+                          <SelectTrigger className="w-[120px] h-9">
+                            <SelectValue placeholder="Rolle ändern" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="creator">Creator</SelectItem>
+                            <SelectItem value="user">User</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </div>
