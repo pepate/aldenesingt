@@ -15,8 +15,12 @@ import {
   QrCode,
   Plus,
   Minus,
+  Pencil,
+  Save,
+  X,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
+import { cloneDeep } from 'lodash';
 
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -53,7 +57,7 @@ import {
   errorEmitter,
   FirestorePermissionError,
 } from '@/firebase';
-import type { Session, Song, SessionParticipant } from '@/lib/types';
+import type { Session, Song, SessionParticipant, SongSheet } from '@/lib/types';
 import {
   doc,
   updateDoc,
@@ -72,7 +76,10 @@ function SessionPageContent() {
   const { user } = useUser();
   const [initialCheckComplete, setInitialCheckComplete] = useState(false);
   const [sessionUrl, setSessionUrl] = useState('');
-  
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedSheet, setEditedSheet] = useState<SongSheet | null>(null);
+
   useEffect(() => {
     // Ensure this runs only on the client
     setSessionUrl(window.location.href);
@@ -158,7 +165,6 @@ function SessionPageContent() {
     }
   }, [sessionLoading]);
 
-
   // Effect to join/leave session
   useEffect(() => {
     if (!user || !firestore || !sessionId || !session) return;
@@ -207,12 +213,24 @@ function SessionPageContent() {
     };
   }, [user, firestore, sessionId, session]);
 
+  // Sync editedSheet when current song changes
+  useEffect(() => {
+    if (currentSong?.sheet) {
+      setEditedSheet(cloneDeep(currentSong.sheet));
+    }
+  }, [currentSong]);
+
   const handleSongChange = async (newSongId: string) => {
     if (!sessionRef || !isHost) return;
 
     try {
       // Reset transpose when song changes
-      await updateDoc(sessionRef, { songId: newSongId, scroll: 0, transpose: 0, lastActivity: serverTimestamp() });
+      await updateDoc(sessionRef, {
+        songId: newSongId,
+        scroll: 0,
+        transpose: 0,
+        lastActivity: serverTimestamp(),
+      });
       const newDoc = allSongs?.find((d) => d.id === newSongId);
       toast({
         title: 'Song gewechselt',
@@ -231,31 +249,57 @@ function SessionPageContent() {
     if (!sessionRef || !isHost || session === null) return;
 
     const newTranspose = (session.transpose || 0) + amount;
-    const updateData = { 
+    const updateData = {
       transpose: newTranspose,
-      lastActivity: serverTimestamp() 
+      lastActivity: serverTimestamp(),
     };
 
     try {
       await updateDoc(sessionRef, updateData);
     } catch (error: any) {
-      console.error("Failed to update transpose value:", error);
+      console.error('Failed to update transpose value:', error);
       if (error.code === 'permission-denied') {
-         const permissionError = new FirestorePermissionError({
-            path: sessionRef.path,
-            operation: 'update',
-            requestResourceData: updateData,
-          });
-          errorEmitter.emit('permission-error', permissionError);
+        const permissionError = new FirestorePermissionError({
+          path: sessionRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
       } else {
         toast({
-            variant: "destructive",
-            title: "Fehler",
-            description: "Transponierung konnte nicht geändert werden.",
+          variant: 'destructive',
+          title: 'Fehler',
+          description: 'Transponierung konnte nicht geändert werden.',
         });
       }
     }
   };
+
+  const handleSaveEdits = async () => {
+    if (!isHost || !currentSongRef || !editedSheet) return;
+    try {
+      await updateDoc(currentSongRef, { sheet: editedSheet });
+      toast({
+        title: 'Gespeichert',
+        description: 'Änderungen am Song-Sheet wurden gespeichert.',
+      });
+      setIsEditing(false);
+    } catch (error: any) {
+      console.error('Failed to save song sheet:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Speichern fehlgeschlagen',
+        description: error.message || 'Die Änderungen konnten nicht gespeichert werden.',
+      });
+    }
+  };
+  
+  const handleCancelEdit = () => {
+    if (currentSong?.sheet) {
+        setEditedSheet(cloneDeep(currentSong.sheet));
+    }
+    setIsEditing(false);
+  }
 
   const copyUrlToClipboard = () => {
     if (sessionUrl) {
@@ -312,7 +356,7 @@ function SessionPageContent() {
                 <Select
                   onValueChange={handleSongChange}
                   value={session.songId}
-                  disabled={!allSongs || allSongs.length === 0}
+                  disabled={!allSongs || allSongs.length === 0 || isEditing}
                 >
                   <SelectTrigger className="w-auto md:w-[300px] font-semibold text-lg">
                     <SelectValue placeholder="Wähle einen Song..." />
@@ -365,13 +409,17 @@ function SessionPageContent() {
                           />
                         )}
                         <AvatarFallback>
-                          {p.isAnonymous ? 'A' : (p.displayName
+                          {p.isAnonymous
+                            ? 'A'
+                            : p.displayName
                             ? p.displayName.charAt(0).toUpperCase()
-                            : 'U')}
+                            : 'U'}
                         </AvatarFallback>
                       </Avatar>
                       <span className="text-sm truncate">
-                        {p.isAnonymous ? `Anonym (${p.id.substring(0,4)})` : (p.displayName || 'Anonymer Nutzer')}
+                        {p.isAnonymous
+                          ? `Anonym (${p.id.substring(0, 4)})`
+                          : p.displayName || 'Anonymer Nutzer'}
                       </span>
                     </li>
                   ))
@@ -386,28 +434,46 @@ function SessionPageContent() {
           </Popover>
 
           {isHost && (
-            <div className="flex items-center gap-1 rounded-md bg-muted p-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => handleTranspose(-1)}
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-              <span className="font-mono text-sm font-semibold w-8 text-center">
-                {(session?.transpose || 0) > 0
-                  ? `+${session?.transpose}`
-                  : session?.transpose || 0}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => handleTranspose(1)}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
+            <div className="flex items-center gap-1">
+              {isEditing ? (
+                 <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleCancelEdit}>
+                        <X className="h-4 w-4"/>
+                    </Button>
+                    <Button size="icon" className="h-8 w-8 bg-green-600 hover:bg-green-700" onClick={handleSaveEdits}>
+                        <Save className="h-4 w-4"/>
+                    </Button>
+                 </div>
+              ) : (
+                <>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsEditing(true)}>
+                    <Pencil className="h-4 w-4"/>
+                </Button>
+                <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleTranspose(-1)}
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <span className="font-mono text-sm font-semibold w-8 text-center">
+                  {(session?.transpose || 0) > 0
+                    ? `+${session?.transpose}`
+                    : session?.transpose || 0}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleTranspose(1)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              </>
+              )}
             </div>
           )}
 
@@ -421,7 +487,7 @@ function SessionPageContent() {
               {isHost ? 'HOST' : 'ZUSCHAUER'}
             </span>
           </div>
-           <Dialog>
+          <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
                 <QrCode className="mr-2 h-4 w-4" />
@@ -462,24 +528,33 @@ function SessionPageContent() {
         </div>
       </header>
       <main className="flex-1 overflow-hidden">
-        {currentSong && sessionRef && session && (
+        {currentSong && sessionRef && session && editedSheet && (
           <SongViewer
+            key={currentSong.id} // Re-mount when song changes
             song={currentSong}
             sessionId={sessionId}
             isHost={isHost}
             sessionRef={sessionRef}
             initialScroll={session.scroll}
             transpose={session.transpose || 0}
+            isEditing={isEditing}
+            sheet={editedSheet}
+            onSheetChange={setEditedSheet}
           />
         )}
-         {!currentSong && !currentSongLoading && (
+        {!currentSong && !currentSongLoading && (
           <div className="flex flex-col items-center justify-center h-full text-center p-4">
             <Music className="h-16 w-16 text-muted-foreground/50" />
             <h2 className="mt-4 text-xl font-semibold">Kein Song ausgewählt</h2>
             {isHost ? (
-              <p className="mt-2 text-muted-foreground">Bitte wählen Sie oben einen Song aus, um die Session zu starten.</p>
+              <p className="mt-2 text-muted-foreground">
+                Bitte wählen Sie oben einen Song aus, um die Session zu
+                starten.
+              </p>
             ) : (
-              <p className="mt-2 text-muted-foreground">Der Host hat noch keinen Song für diese Session ausgewählt.</p>
+              <p className="mt-2 text-muted-foreground">
+                Der Host hat noch keinen Song für diese Session ausgewählt.
+              </p>
             )}
           </div>
         )}

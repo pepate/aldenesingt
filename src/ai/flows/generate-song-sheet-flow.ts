@@ -78,10 +78,24 @@ Analyze the following song:
 Song Title: {{title}}
 Artist: {{artist}}
 
+The chords and lyrics will be displayed in a monospace font. This means chord placement is critical.
+
+CRITICAL INSTRUCTION FOR CHORD PLACEMENT:
+The 'chords' string must be perfectly aligned with the 'text' string. Use spaces to position the chord directly above the corresponding syllable or word. If a line has no chords, the 'chords' field must be an empty string. The 'chords' and 'text' strings for a single line do NOT need to have the same length. Focus on correct placement over equal length.
+
+For example:
+GOOD:
+"chords": "G           C        G",
+"text":   "Über den Wolken"
+
+BAD (misaligned):
+"chords": "G C G",
+"text":   "Über den Wolken"
+
 {{#if lyrics}}
 The exact lyrics for the song are provided below. Your task is to:
 1.  Use the provided lyrics VERBATIM. Do not change, add, or remove a single word. Structure them into parts (verse, chorus, etc.) as appropriate.
-2.  Add the correct chords for each line of text. The chords must be precisely aligned above the corresponding syllables of the lyrics. Use spaces to ensure perfect alignment for musicians. If a line contains no chords, the 'chords' field must be an empty string.
+2.  Add the correct chords for each line of text, following the CRITICAL INSTRUCTION FOR CHORD PLACEMENT above.
 3.  Fill out the other metadata fields (releaseDate, genre, key) with accurate information based on the song. It is crucial that you correctly identify the song's original key.
 
 Provided Lyrics:
@@ -100,7 +114,7 @@ Please provide the following information:
 - sheet.song: An array of the song's parts. Each part must have:
   - part: The name of the section (e.g., "Strophe 1", "Refrain", "Bridge", "Gitarrensolo"). Use German terms.
   - lines: An array of lines. Each line object must contain:
-    - chords: The correct chords for that line of text. The chords must be precisely aligned above the corresponding syllables of the lyrics. Use spaces to ensure perfect alignment for musicians. If a line contains no chords, this field must be an empty string.
+    - chords: The correct chords for that line of text, following the CRITICAL INSTRUCTION FOR CHORD PLACEMENT above.
     - text: The exact, verbatim lyrics for that line.
 
 Generate the complete and accurate song sheet. Do not improvise or add any information that is not widely recognized as part of the official song. The accuracy of the lyrics and chord placements is of utmost importance.

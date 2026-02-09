@@ -34,21 +34,24 @@ const transposeNote = (note: string, amount: number): string => {
 };
 
 /**
- * Transposes a full chord string (e.g., "Am7/G") by replacing its root and bass notes.
+ * Transposes a full chord string (e.g., "Am7/G", "G-Dur") by replacing its root and bass notes.
  * @param chord The chord string to transpose.
  * @param amount The number of semitones to shift.
  * @returns The transposed chord string.
  */
 export const transposeChord = (chord: string, amount: number): string => {
-    // This regex finds all valid note names (A-G with optional # or b) in a chord string.
+    // This regex finds all valid note names (A-G with optional # or b) that are not followed by a letter
+    // (to avoid matching things like 'A' in 'Am'). This is a simplification and might not cover all edge cases
+    // but is generally effective for root notes of chords.
     return chord.replace(/[A-G](?:#|b)?/g, (match) => transposeNote(match, amount));
 };
 
+
 /**
- * Transposes the chords within a structured song sheet.
+ * Transposes the chords and the key within a structured song sheet.
  * @param sheet The song sheet object.
  * @param amount The number of semitones to shift.
- * @returns A new song sheet object with transposed chords.
+ * @returns A new song sheet object with transposed chords and key.
  */
 export const transposeSongSheet = (sheet: SongSheet, amount: number): SongSheet => {
     if (amount === 0) return sheet;
@@ -73,5 +76,7 @@ export const transposeSongSheet = (sheet: SongSheet, amount: number): SongSheet 
         return { ...part, lines: newLines };
     });
 
-    return { ...sheet, song: newSongParts };
+    const transposedKey = transposeChord(sheet.key, amount);
+
+    return { ...sheet, key: transposedKey, song: newSongParts };
 };

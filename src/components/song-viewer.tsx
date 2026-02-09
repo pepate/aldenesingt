@@ -1,10 +1,17 @@
 'use client';
 
 import { useRef, useEffect, useCallback, useMemo } from 'react';
-import { DocumentReference, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
-import type { Session, Song } from '@/lib/types';
+import {
+  DocumentReference,
+  onSnapshot,
+  updateDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
+import type { Session, Song, SongSheet } from '@/lib/types';
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
 import { transposeSongSheet } from '@/lib/transpose';
+import { cloneDeep } from 'lodash';
+import { Input } from './ui/input';
 
 interface SongViewerProps {
   song: Song;
@@ -13,6 +20,9 @@ interface SongViewerProps {
   sessionRef: DocumentReference<Session> | null;
   initialScroll: number;
   transpose: number;
+  isEditing: boolean;
+  sheet: SongSheet;
+  onSheetChange: (sheet: SongSheet) => void;
 }
 
 const DEBOUNCE_TIME = 200;
@@ -23,19 +33,23 @@ export default function SongViewer({
   sessionRef,
   initialScroll,
   transpose,
+  isEditing,
+  sheet,
+  onSheetChange,
 }: SongViewerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isUpdatingByListener = useRef(false);
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Memoize the transposed content. It will update for everyone
-  // when the `transpose` prop changes (which comes from the session doc).
+  // Memoize the transposed content for view mode.
   const transposedSheet = useMemo(() => {
     if (!song.sheet) return null;
     return transposeSongSheet(song.sheet, transpose);
   }, [song.sheet, transpose]);
 
-  // Reset scroll when content changes
+  const displaySheet = isEditing ? sheet : transposedSheet;
+
+  // Reset scroll when content changes (excluding edits)
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
@@ -45,9 +59,9 @@ export default function SongViewer({
   const sendScrollUpdate = useCallback(
     (scrollTop: number) => {
       if (sessionRef) {
-        const updateData = { 
-            scroll: scrollTop,
-            lastActivity: serverTimestamp() 
+        const updateData = {
+          scroll: scrollTop,
+          lastActivity: serverTimestamp(),
         };
         updateDoc(sessionRef, updateData).catch(async (error) => {
           if (error.code === 'permission-denied') {
@@ -83,7 +97,7 @@ export default function SongViewer({
       isUpdatingByListener.current = false; // Reset flag after programmatic scroll
       return;
     }
-    if (isHost) {
+    if (isHost && !isEditing) {
       debouncedSendScroll(e.currentTarget.scrollTop);
     }
   };
@@ -129,7 +143,28 @@ export default function SongViewer({
     }
   }, [initialScroll]);
 
-  if (!transposedSheet) {
+  const handleChordChange = (
+    partIndex: number,
+    lineIndex: number,
+    value: string
+  ) => {
+    const newSheet = cloneDeep(sheet);
+    newSheet.song[partIndex].lines[lineIndex].chords = value;
+    onSheetChange(newSheet);
+  };
+  
+  const handleLyricChange = (
+    partIndex: number,
+    lineIndex: number,
+    value: string
+  ) => {
+    const newSheet = cloneDeep(sheet);
+    newSheet.song[partIndex].lines[lineIndex].text = value;
+    onSheetChange(newSheet);
+  };
+
+
+  if (!displaySheet) {
     return <div className="p-4">Song-Daten werden geladen...</div>;
   }
 
@@ -146,22 +181,56 @@ export default function SongViewer({
     >
       <div className="max-w-2xl mx-auto">
         <div className="mb-4">
-          <p><span className="font-bold">Erscheinungsdatum:</span> {transposedSheet.releaseDate}</p>
-          <p><span className="font-bold">Genre:</span> {transposedSheet.genre}</p>
-          <p><span className="font-bold">Tonart:</span> {transposedSheet.key}</p>
+          <p>
+            <span className="font-bold">Erscheinungsdatum:</span>{' '}
+            {displaySheet.releaseDate}
+          </p>
+          <p>
+            <span className="font-bold">Genre:</span> {displaySheet.genre}
+          </p>
+          <p>
+            <span className="font-bold">Tonart:</span> {displaySheet.key}
+          </p>
         </div>
 
-        {transposedSheet.song.map((part, partIndex) => (
+        {displaySheet.song.map((part, partIndex) => (
           <div key={partIndex} className="mb-6">
-            <h3 className="font-bold text-lg mb-2 border-b pb-1">{part.part}</h3>
+            <h3 className="font-bold text-lg mb-2 border-b pb-1">
+              {part.part}
+            </h3>
             {part.lines.map((line, lineIndex) => (
-              <div key={lineIndex} className="flex flex-col mb-1 font-code text-sm sm:text-base">
-                {line.chords && (
-                  <div className="text-primary font-bold whitespace-pre-wrap">
-                    {line.chords}
-                  </div>
+              <div
+                key={lineIndex}
+                className="flex flex-col mb-1 font-code text-sm sm:text-base"
+              >
+                {isEditing ? (
+                  <Input
+                    type="text"
+                    value={line.chords}
+                    onChange={(e) =>
+                      handleChordChange(partIndex, lineIndex, e.target.value)
+                    }
+                    className="font-code text-primary font-bold bg-muted/50 border-primary/20 h-8 mb-1"
+                    placeholder="Akkorde..."
+                  />
+                ) : (
+                  line.chords && (
+                    <div className="text-primary font-bold whitespace-pre-wrap">
+                      {line.chords}
+                    </div>
+                  )
                 )}
-                <div className="whitespace-pre-wrap">{line.text}</div>
+                 {isEditing ? (
+                    <Input
+                        type="text"
+                        value={line.text}
+                        onChange={(e) => handleLyricChange(partIndex, lineIndex, e.target.value)}
+                        className="font-code bg-muted/50 h-8"
+                        placeholder="Songtext..."
+                    />
+                ) : (
+                     <div className="whitespace-pre-wrap">{line.text}</div>
+                )}
               </div>
             ))}
           </div>
