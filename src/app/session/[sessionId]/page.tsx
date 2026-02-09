@@ -81,14 +81,14 @@ function SessionPageContent() {
   const [songSelectorOpen, setSongSelectorOpen] = useState(false);
   const [songSearch, setSongSearch] = useState('');
 
-  useEffect(() => {
-    // Ensure this runs only on the client
-    setSessionUrl(window.location.href);
-  }, []);
-
   const sessionId = Array.isArray(params.sessionId)
     ? params.sessionId[0].toUpperCase()
     : params.sessionId.toUpperCase();
+
+  useEffect(() => {
+    // Ensure this runs only on the client and uses the custom domain
+    setSessionUrl(`https://qkqk.de/session/${sessionId}`);
+  }, [sessionId]);
 
   const sessionRef = useMemoFirebase(
     () => (firestore ? doc(firestore, 'sessions', sessionId) : null),
