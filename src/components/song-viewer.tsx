@@ -18,7 +18,6 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from './ui/button';
 import { ArrowLeftFromLine, CornerDownLeft } from 'lucide-react';
 
@@ -119,7 +118,6 @@ export default function SongViewer({
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // State for mobile chord editor
-  const isMobile = useIsMobile();
   const [activeInput, setActiveInput] = useState<{
     partIndex: number;
     lineIndex: number;
@@ -335,7 +333,7 @@ export default function SongViewer({
     return (
       <div
         className="h-full w-full overflow-y-auto bg-background p-4 sm:p-6 md:p-8"
-        style={{ paddingBottom: isMobile ? '10rem' : 'initial' }}
+        style={{ paddingBottom: activeInput ? '10rem' : 'initial' }}
       >
         <div className="max-w-2xl mx-auto">
           <Tabs
@@ -379,27 +377,23 @@ export default function SongViewer({
                               )
                             }
                             onFocus={(e) => {
-                              if (isMobile) {
-                                setActiveInput({
-                                  partIndex: originalIndex,
-                                  lineIndex,
-                                  inputRef,
-                                });
-                              }
+                              setActiveInput({
+                                partIndex: originalIndex,
+                                lineIndex,
+                                inputRef,
+                              });
                               setCursorPosition(e.target.selectionStart ?? 0);
                             }}
                             onBlur={() => {
-                              if (isMobile) {
-                                setTimeout(() => {
-                                  if (
-                                    document.activeElement?.closest(
-                                      '.chord-helper-toolbar'
-                                    )
+                              setTimeout(() => {
+                                if (
+                                  document.activeElement?.closest(
+                                    '.chord-helper-toolbar'
                                   )
-                                    return;
-                                  setActiveInput(null);
-                                }, 200);
-                              }
+                                )
+                                  return;
+                                setActiveInput(null);
+                              }, 200);
                             }}
                             onSelect={(e) =>
                               setCursorPosition(
@@ -426,7 +420,7 @@ export default function SongViewer({
             })}
           </Tabs>
         </div>
-        {isMobile && activeInput && <ChordHelper onInsert={handleInsertChordText} />}
+        {activeInput && <ChordHelper onInsert={handleInsertChordText} />}
       </div>
     );
   }
