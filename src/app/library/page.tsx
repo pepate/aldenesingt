@@ -83,6 +83,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { UserNav } from '@/components/user-nav';
 import { generateSongSheet } from '@/ai/flows/generate-song-sheet-flow';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 function LibraryPage() {
   const { user, loading: userLoading } = useUser();
@@ -98,6 +99,9 @@ function LibraryPage() {
 
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false);
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
+
+  const [lyricsRequest, setLyricsRequest] = useState<any | null>(null);
+  const [manualLyrics, setManualLyrics] = useState('');
 
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -149,6 +153,72 @@ function LibraryPage() {
     return () => clearTimeout(debounceTimer);
   }, [searchQuery, toast]);
 
+  const generateAndSaveSong = async (track: any, lyrics: string) => {
+    if (!user || !firestore || !userProfileRef) return;
+
+    setIsGenerating(true);
+    setGeneratingInfo(track);
+    setLyricsRequest(null); // Close dialog if it was open
+    setManualLyrics('');
+
+    try {
+      const {
+        songtitle,
+        artist: songArtist,
+        sheet,
+        artworkUrl,
+      } = await generateSongSheet({
+        title: track.trackName,
+        artist: track.artistName,
+        lyrics: lyrics,
+      });
+
+      if (!sheet || !sheet.song) {
+        throw new Error('Die KI konnte kein gültiges Song-Sheet erstellen.');
+      }
+
+      const songsCollectionRef = collection(firestore, 'songs');
+      await addDoc(songsCollectionRef, {
+        userId: user.uid,
+        creatorName: user.displayName || user.email || 'Anonym',
+        title: songtitle,
+        artist: songArtist,
+        sheet: sheet,
+        createdAt: serverTimestamp(),
+        artworkUrl: artworkUrl || null,
+      });
+
+      // Update generation count for creators
+      if (userProfile?.role === 'creator') {
+        const today = new Date().toISOString().split('T')[0];
+        const newCount =
+          userProfile.lastGenerationDate === today
+            ? (userProfile.songsGeneratedToday || 0) + 1
+            : 1;
+        await updateDoc(userProfileRef, {
+          songsGeneratedToday: newCount,
+          lastGenerationDate: today,
+        });
+      }
+
+      toast({
+        title: 'Song-Sheet generiert & gespeichert',
+        description: `"${songtitle}" von ${songArtist} wurde zur Bibliothek hinzugefügt.`,
+      });
+    } catch (error: any) {
+      console.error('Processing Error: ', error);
+      toast({
+        variant: 'destructive',
+        title: 'Generierung fehlgeschlagen',
+        description:
+          error.message || 'Das Song-Sheet konnte nicht generiert werden.',
+      });
+    } finally {
+      setIsGenerating(false);
+      setGeneratingInfo(null);
+    }
+  };
+
   const handleGenerateSong = async (track: any) => {
     if (isGenerating) return;
 
@@ -180,7 +250,7 @@ function LibraryPage() {
       const today = new Date().toISOString().split('T')[0];
       const songsToday =
         userProfile.lastGenerationDate === today
-          ? userProfile.songsGeneratedToday
+          ? userProfile.songsGeneratedToday || 0
           : 0;
 
       if (songsToday >= 5) {
@@ -194,67 +264,38 @@ function LibraryPage() {
       }
     }
 
-    setIsGenerating(true);
     setGeneratingInfo(track);
     setSearchQuery('');
     setSearchResults([]);
 
     try {
-      const {
-        songtitle,
-        artist: songArtist,
-        sheet,
-        artworkUrl,
-      } = await generateSongSheet({
-        title: track.trackName,
-        artist: track.artistName,
-      });
-
-      if (!sheet || !sheet.song) {
-        throw new Error('Die KI konnte kein gültiges Song-Sheet erstellen.');
+      const lyricsResponse = await fetch(
+        `https://api.lyrics.ovh/v1/${encodeURIComponent(
+          track.artistName
+        )}/${encodeURIComponent(track.trackName)}`
+      );
+      if (!lyricsResponse.ok) {
+        throw new Error('Lyrics API request failed');
       }
+      const lyricsData = await lyricsResponse.json();
+      const lyrics = lyricsData.lyrics?.replace(/(\r\n|\r)/g, '\n').trim();
 
-      const songsCollectionRef = collection(firestore, 'songs');
-      await addDoc(songsCollectionRef, {
-        userId: user.uid,
-        creatorName: user.displayName || user.email || 'Anonym',
-        title: songtitle,
-        artist: songArtist,
-        sheet: sheet,
-        createdAt: serverTimestamp(),
-        artworkUrl: artworkUrl || null,
-      });
-
-      // Update generation count for creators
-      if (userProfile.role === 'creator') {
-        const today = new Date().toISOString().split('T')[0];
-        const newCount =
-          userProfile.lastGenerationDate === today
-            ? userProfile.songsGeneratedToday + 1
-            : 1;
-        await updateDoc(userProfileRef, {
-          songsGeneratedToday: newCount,
-          lastGenerationDate: today,
-        });
+      if (lyrics) {
+        await generateAndSaveSong(track, lyrics);
+      } else {
+        throw new Error('Lyrics not found in API response');
       }
-
-      toast({
-        title: 'Song-Sheet generiert & gespeichert',
-        description: `"${songtitle}" von ${songArtist} wurde zur Bibliothek hinzugefügt.`,
-      });
-    } catch (error: any) {
-      console.error('Processing Error: ', error);
-      toast({
-        variant: 'destructive',
-        title: 'Generierung fehlgeschlagen',
-        description:
-          error.message || 'Das Song-Sheet konnte nicht generiert werden.',
-      });
-    } finally {
-      setIsGenerating(false);
+    } catch (e) {
+      console.warn('Could not fetch lyrics, prompting user for manual input.');
       setGeneratingInfo(null);
+      setLyricsRequest(track);
     }
   };
+  
+  const handleManualSubmit = async () => {
+    if (!lyricsRequest || !manualLyrics) return;
+    await generateAndSaveSong(lyricsRequest, manualLyrics);
+  }
 
   const handleDelete = async (songToDelete: Song) => {
     if (
@@ -455,10 +496,10 @@ function LibraryPage() {
                 {userProfile?.role === 'creator' &&
                   ` (${
                     5 -
-                    (userProfile.lastGenerationDate ===
+                    ((userProfile.lastGenerationDate ===
                     new Date().toISOString().split('T')[0]
                       ? userProfile.songsGeneratedToday
-                      : 0)
+                      : 0) || 0)
                   }/5 heute übrig)`}
               </CardDescription>
             </CardHeader>
@@ -558,6 +599,34 @@ function LibraryPage() {
             </CardContent>
           </Card>
         )}
+        
+        <Dialog open={!!lyricsRequest} onOpenChange={(open) => !open && setLyricsRequest(null)}>
+            <DialogContent>
+                <DialogHeader>
+                <DialogTitle>Songtext nicht gefunden</DialogTitle>
+                <DialogDescription>
+                    Wir konnten den Songtext für "{lyricsRequest?.trackName}" von "{lyricsRequest?.artistName}" nicht automatisch finden.
+                    Bitte füge den Text manuell ein, damit wir die Akkorde generieren können.
+                </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-2">
+                <Label htmlFor="manual-lyrics">Songtext</Label>
+                <Textarea
+                    id="manual-lyrics"
+                    placeholder="Füge hier den Songtext ein..."
+                    className="h-64 font-mono text-sm"
+                    value={manualLyrics}
+                    onChange={(e) => setManualLyrics(e.target.value)}
+                />
+                </div>
+                <DialogFooter>
+                <Button variant="outline" onClick={() => setLyricsRequest(null)}>Abbrechen</Button>
+                <Button onClick={handleManualSubmit} disabled={!manualLyrics}>
+                    Akkorde generieren
+                </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
         <div>
           <h2 className="text-2xl font-bold mb-4">Alle Songs</h2>

@@ -13,6 +13,11 @@ import { z } from 'genkit';
 const GenerateSongSheetInputSchema = z.object({
   title: z.string().describe('The title of the song.'),
   artist: z.string().describe('The artist of the song.'),
+  lyrics: z
+    .string()
+    .describe(
+      'The verified lyrics of the song. The AI must use these lyrics exactly.'
+    ),
 });
 export type GenerateSongSheetInput = z.infer<
   typeof GenerateSongSheetInputSchema
@@ -58,27 +63,11 @@ export async function generateSongSheet(
   return generateSongSheetFlow(input);
 }
 
-// The prompt's input can optionally include the lyrics
-const PromptInputSchema = GenerateSongSheetInputSchema.extend({
-  lyrics: z
-    .string()
-    .optional()
-    .describe(
-      'The verified lyrics of the song. If provided, the AI must use these lyrics exactly.'
-    ),
-});
-
 const prompt = ai.definePrompt({
   name: 'generateSongSheetPrompt',
-  input: { schema: PromptInputSchema },
+  input: { schema: GenerateSongSheetInputSchema },
   output: { schema: GenerateSongSheetOutputSchema },
   prompt: `You are a meticulous and highly accurate music archivist. Your primary goal is to create a factually correct and precise song sheet. It is critical that you do not invent, guess, or hallucinate any lyrics or chords. Your reputation depends on your accuracy.
-
-Analyze the following song:
-Song Title: {{title}}
-Artist: {{artist}}
-
-The chords and lyrics will be displayed in a monospace font. This means chord placement is critical.
 
 CRITICAL INSTRUCTION FOR CHORD PLACEMENT:
 The 'chords' string must be perfectly aligned with the 'text' string. Use spaces to position the chord directly above the corresponding syllable or word. If a line has no chords, the 'chords' field must be an empty string. The 'chords' and 'text' strings for a single line do NOT need to have the same length. Focus on correct placement over equal length.
@@ -92,33 +81,19 @@ BAD (misaligned):
 "chords": "G C G",
 "text":   "Über den Wolken"
 
-{{#if lyrics}}
 The exact lyrics for the song are provided below. Your task is to:
 1.  Use the provided lyrics VERBATIM. Do not change, add, or remove a single word. Structure them into parts (verse, chorus, etc.) as appropriate.
 2.  Add the correct chords for each line of text, following the CRITICAL INSTRUCTION FOR CHORD PLACEMENT above.
 3.  Fill out the other metadata fields (releaseDate, genre, key) with accurate information based on the song. It is crucial that you correctly identify the song's original key.
 
+Song Title: {{title}}
+Artist: {{artist}}
+
 Provided Lyrics:
 ---
 {{{lyrics}}}
 ---
-{{else}}
-Generate a detailed and accurate song sheet for the given song, adhering strictly to the JSON format provided.
-
-Please provide the following information:
-- songtitle: The official, verified title of the song.
-- artist: The name of the original recording artist.
-- sheet.releaseDate: The year the song was originally released.
-- sheet.genre: The primary genre of the song (e.g., "Liedermacher", "Pop", "Rock").
-- sheet.key: It is crucial that you accurately identify and provide the original musical key of the song (e.g., "G-Dur", "A-Moll"). Your accuracy on this point is paramount.
-- sheet.song: An array of the song's parts. Each part must have:
-  - part: The name of the section (e.g., "Strophe 1", "Refrain", "Bridge", "Gitarrensolo"). Use German terms.
-  - lines: An array of lines. Each line object must contain:
-    - chords: The correct chords for that line of text, following the CRITICAL INSTRUCTION FOR CHORD PLACEMENT above.
-    - text: The exact, verbatim lyrics for that line.
-
-Generate the complete and accurate song sheet. Do not improvise or add any information that is not widely recognized as part of the official song. The accuracy of the lyrics and chord placements is of utmost importance.
-{{/if}}`,
+`,
 });
 
 const generateSongSheetFlow = ai.defineFlow(
@@ -128,30 +103,8 @@ const generateSongSheetFlow = ai.defineFlow(
     outputSchema: GenerateSongSheetOutputSchema,
   },
   async (input) => {
-    // 1. Try to fetch lyrics from lyrics.ovh
-    let lyrics: string | undefined = undefined;
-    try {
-      const lyricsResponse = await fetch(
-        `https://api.lyrics.ovh/v1/${encodeURIComponent(
-          input.artist
-        )}/${encodeURIComponent(input.title)}`
-      );
-      if (lyricsResponse.ok) {
-        const lyricsData = await lyricsResponse.json();
-        if (lyricsData.lyrics) {
-          // Clean up lyrics fetched from the API
-          lyrics = lyricsData.lyrics.replace(/(\r\n|\r)/g, '\n').trim();
-        }
-      }
-    } catch (e) {
-      console.warn('Could not fetch lyrics from lyrics.ovh, proceeding without them.', e);
-      // Do not throw, proceed without pre-fetched lyrics.
-      // The prompt will handle the case where lyrics are not provided.
-    }
-
-    // 2. Get song sheet from Gemini, providing lyrics if they were found
-    const promptInput = lyrics ? { ...input, lyrics } : input;
-    const { output } = await prompt(promptInput);
+    // 1. Get song sheet from Gemini, using the provided lyrics
+    const { output } = await prompt(input);
 
     if (!output) {
       throw new Error(
@@ -159,7 +112,7 @@ const generateSongSheetFlow = ai.defineFlow(
       );
     }
 
-    // 3. Fetch artwork from iTunes
+    // 2. Fetch artwork from iTunes
     let artworkUrl: string | undefined = undefined;
     try {
       const searchTerm = encodeURIComponent(`${input.artist} ${input.title}`);
