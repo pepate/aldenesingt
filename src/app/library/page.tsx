@@ -90,9 +90,7 @@ function LibraryPage() {
   const { toast } = useToast();
 
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatingTrackId, setGeneratingTrackId] = useState<number | null>(
-    null
-  );
+  const [generatingInfo, setGeneratingInfo] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -150,11 +148,7 @@ function LibraryPage() {
     return () => clearTimeout(debounceTimer);
   }, [searchQuery, toast]);
 
-  const handleGenerateSong = async (
-    title: string,
-    artist: string,
-    trackId: number
-  ) => {
+  const handleGenerateSong = async (track: any) => {
     if (isGenerating) return;
 
     if (!user || !firestore || !userProfileRef || !userProfile) {
@@ -200,7 +194,10 @@ function LibraryPage() {
     }
 
     setIsGenerating(true);
-    setGeneratingTrackId(trackId);
+    setGeneratingInfo(track);
+    setSearchQuery('');
+    setSearchResults([]);
+
     try {
       const {
         songtitle,
@@ -208,8 +205,8 @@ function LibraryPage() {
         sheet,
         artworkUrl,
       } = await generateSongSheet({
-        title,
-        artist,
+        title: track.trackName,
+        artist: track.artistName,
       });
 
       if (!sheet || !sheet.song) {
@@ -244,8 +241,6 @@ function LibraryPage() {
         title: 'Song-Sheet generiert & gespeichert',
         description: `"${songtitle}" von ${songArtist} wurde zur Bibliothek hinzugefügt.`,
       });
-      setSearchQuery('');
-      setSearchResults([]);
     } catch (error: any) {
       console.error('Processing Error: ', error);
       toast({
@@ -256,7 +251,7 @@ function LibraryPage() {
       });
     } finally {
       setIsGenerating(false);
-      setGeneratingTrackId(null);
+      setGeneratingInfo(null);
     }
   };
 
@@ -468,75 +463,96 @@ function LibraryPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="song-search">Song-Suche</Label>
-                  <Input
-                    id="song-search"
-                    placeholder="z.B. Über den Wolken, Reinhard Mey"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-
-                {isSearching && (
-                  <div className="flex items-center justify-center p-4">
-                    <Loader2 className="h-6 w-6 animate-spin" />
+                {generatingInfo ? (
+                  <div className="flex items-center gap-4 p-4 border rounded-lg bg-muted/50">
+                    <Image
+                      src={generatingInfo.artworkUrl100.replace(
+                        '100x100',
+                        '80x80'
+                      )}
+                      alt={generatingInfo.trackName}
+                      width={80}
+                      height={80}
+                      className="rounded-md"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold">
+                        {generatingInfo.trackName}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {generatingInfo.artistName}
+                      </div>
+                      <div className="flex items-center gap-2 mt-2 text-sm text-primary">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Song-Sheet wird generiert...</span>
+                      </div>
+                    </div>
                   </div>
-                )}
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="song-search">Song-Suche</Label>
+                      <Input
+                        id="song-search"
+                        placeholder="z.B. Über den Wolken, Reinhard Mey"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        disabled={isGenerating}
+                      />
+                    </div>
 
-                {!isSearching && searchResults.length > 0 && (
-                  <div className="border rounded-md max-h-72 overflow-y-auto">
-                    <ul className="divide-y">
-                      {searchResults.map((track) => (
-                        <li key={track.trackId}>
-                          <button
-                            className="w-full text-left p-3 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
-                            onClick={() =>
-                              handleGenerateSong(
-                                track.trackName,
-                                track.artistName,
-                                track.trackId
-                              )
-                            }
-                            disabled={isGenerating}
-                          >
-                            <Image
-                              src={track.artworkUrl100.replace(
-                                '100x100',
-                                '60x60'
-                              )}
-                              alt={track.trackName}
-                              width={60}
-                              height={60}
-                              className="rounded-md"
-                            />
-                            <div className="flex-1 overflow-hidden">
-                              <div className="font-semibold truncate">
-                                {track.trackName}
-                              </div>
-                              <div className="text-sm text-muted-foreground truncate">
-                                {track.artistName}
-                              </div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {track.collectionName}
-                              </div>
-                            </div>
-                            {generatingTrackId === track.trackId && (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            )}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                    {isSearching && (
+                      <div className="flex items-center justify-center p-4">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      </div>
+                    )}
+
+                    {!isSearching && searchResults.length > 0 && (
+                      <div className="border rounded-md max-h-72 overflow-y-auto">
+                        <ul className="divide-y">
+                          {searchResults.map((track) => (
+                            <li key={track.trackId}>
+                              <button
+                                className="w-full text-left p-3 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
+                                onClick={() => handleGenerateSong(track)}
+                                disabled={isGenerating}
+                              >
+                                <Image
+                                  src={track.artworkUrl100.replace(
+                                    '100x100',
+                                    '60x60'
+                                  )}
+                                  alt={track.trackName}
+                                  width={60}
+                                  height={60}
+                                  className="rounded-md"
+                                />
+                                <div className="flex-1 overflow-hidden">
+                                  <div className="font-semibold truncate">
+                                    {track.trackName}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground truncate">
+                                    {track.artistName}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {track.collectionName}
+                                  </div>
+                                </div>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {!isSearching &&
+                      searchQuery &&
+                      searchResults.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center p-4">
+                          Keine Ergebnisse gefunden.
+                        </p>
+                      )}
+                  </>
                 )}
-                {!isSearching &&
-                  searchQuery &&
-                  searchResults.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center p-4">
-                      Keine Ergebnisse gefunden.
-                    </p>
-                  )}
               </div>
             </CardContent>
           </Card>
