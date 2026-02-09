@@ -79,17 +79,12 @@ function AdminPage() {
   const authLoading = userLoading || profileLoading;
 
   useEffect(() => {
-    // Don't run the effect until we have the auth and profile status
     if (authLoading) {
-      return;
+      return; // Wait until loading is complete
     }
 
-    // If loading is finished and user is not an admin, redirect
-    if (
-      !currentUserProfile ||
-      (currentUserProfile.role !== 'admin' &&
-        currentUserProfile.role !== 'superadmin')
-    ) {
+    const userRole = currentUserProfile?.role;
+    if (userRole !== 'admin' && userRole !== 'superadmin') {
       toast({
         variant: 'destructive',
         title: 'Zugriff verweigert',
@@ -98,6 +93,7 @@ function AdminPage() {
       router.push('/');
     }
   }, [authLoading, currentUserProfile, router, toast]);
+
 
   useEffect(() => {
     if (fetchedUsers) {
@@ -145,12 +141,8 @@ function AdminPage() {
   };
 
   // Show a loader while verifying auth or if the user is not authorized (before redirect)
-  if (
-    authLoading ||
-    !currentUserProfile ||
-    (currentUserProfile.role !== 'admin' &&
-      currentUserProfile.role !== 'superadmin')
-  ) {
+  const userRole = currentUserProfile?.role;
+  if (authLoading || (userRole !== 'admin' && userRole !== 'superadmin')) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
