@@ -23,6 +23,7 @@ interface SongViewerProps {
   isEditing: boolean;
   sheet: SongSheet;
   onSheetChange: (sheet: SongSheet) => void;
+  showChords: boolean;
 }
 
 const DEBOUNCE_TIME = 200;
@@ -36,6 +37,7 @@ export default function SongViewer({
   isEditing,
   sheet,
   onSheetChange,
+  showChords,
 }: SongViewerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isUpdatingByListener = useRef(false);
@@ -152,7 +154,7 @@ export default function SongViewer({
     newSheet.song[partIndex].lines[lineIndex].chords = value;
     onSheetChange(newSheet);
   };
-  
+
   const handleLyricChange = (
     partIndex: number,
     lineIndex: number,
@@ -162,7 +164,6 @@ export default function SongViewer({
     newSheet.song[partIndex].lines[lineIndex].text = value;
     onSheetChange(newSheet);
   };
-
 
   if (!displaySheet) {
     return <div className="p-4">Song-Daten werden geladen...</div>;
@@ -214,22 +215,25 @@ export default function SongViewer({
                     placeholder="Akkorde..."
                   />
                 ) : (
+                  showChords &&
                   line.chords && (
                     <div className="text-primary font-bold whitespace-pre-wrap">
                       {line.chords}
                     </div>
                   )
                 )}
-                 {isEditing ? (
-                    <Input
-                        type="text"
-                        value={line.text}
-                        onChange={(e) => handleLyricChange(partIndex, lineIndex, e.target.value)}
-                        className="font-code bg-muted/50 h-8"
-                        placeholder="Songtext..."
-                    />
+                {isEditing ? (
+                  <Input
+                    type="text"
+                    value={line.text}
+                    onChange={(e) =>
+                      handleLyricChange(partIndex, lineIndex, e.target.value)
+                    }
+                    className="font-code bg-muted/50 h-8"
+                    placeholder="Songtext..."
+                  />
                 ) : (
-                     <div className="whitespace-pre-wrap">{line.text}</div>
+                  <div className="whitespace-pre-wrap">{line.text}</div>
                 )}
               </div>
             ))}

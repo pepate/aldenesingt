@@ -18,6 +18,8 @@ import {
   Pencil,
   Save,
   X,
+  ChevronsUpDown,
+  Check,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { cloneDeep } from 'lodash';
@@ -25,13 +27,6 @@ import { cloneDeep } from 'lodash';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import SongViewer from '@/components/song-viewer';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Popover,
   PopoverContent,
@@ -45,6 +40,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
@@ -67,6 +64,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { UserNav } from '@/components/user-nav';
+import Image from 'next/image';
 
 function SessionPageContent() {
   const params = useParams();
@@ -79,6 +77,9 @@ function SessionPageContent() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedSheet, setEditedSheet] = useState<SongSheet | null>(null);
+  const [showChords, setShowChords] = useState(true);
+  const [songSelectorOpen, setSongSelectorOpen] = useState(false);
+  const [songSearch, setSongSearch] = useState('');
 
   useEffect(() => {
     // Ensure this runs only on the client
@@ -118,6 +119,17 @@ function SessionPageContent() {
   );
   const { data: allSongs, loading: songsLoading } =
     useCollection<Song>(allSongsRef);
+
+  const filteredSongs = useMemo(() => {
+    if (!allSongs) return [];
+    const query = songSearch.toLowerCase();
+    if (!query) return allSongs;
+    return allSongs.filter(
+      (song) =>
+        song.title.toLowerCase().includes(query) ||
+        song.artist.toLowerCase().includes(query)
+    );
+  }, [allSongs, songSearch]);
 
   // Current song for the session
   const currentSongRef = useMemoFirebase(
@@ -289,17 +301,18 @@ function SessionPageContent() {
       toast({
         variant: 'destructive',
         title: 'Speichern fehlgeschlagen',
-        description: error.message || 'Die Änderungen konnten nicht gespeichert werden.',
+        description:
+          error.message || 'Die Änderungen konnten nicht gespeichert werden.',
       });
     }
   };
-  
+
   const handleCancelEdit = () => {
     if (currentSong?.sheet) {
-        setEditedSheet(cloneDeep(currentSong.sheet));
+      setEditedSheet(cloneDeep(currentSong.sheet));
     }
     setIsEditing(false);
-  }
+  };
 
   const copyUrlToClipboard = () => {
     if (sessionUrl) {
@@ -353,22 +366,94 @@ function SessionPageContent() {
             <Music className="h-6 w-6 text-primary" />
             <div className="hidden sm:block">
               {isHost ? (
-                <Select
-                  onValueChange={handleSongChange}
-                  value={session.songId}
-                  disabled={!allSongs || allSongs.length === 0 || isEditing}
+                <Popover
+                  open={songSelectorOpen}
+                  onOpenChange={setSongSelectorOpen}
                 >
-                  <SelectTrigger className="w-auto md:w-[300px] font-semibold text-lg">
-                    <SelectValue placeholder="Wähle einen Song..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allSongs?.map((doc) => (
-                      <SelectItem key={doc.id} value={doc.id}>
-                        {doc.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={songSelectorOpen}
+                      className="w-auto md:w-[300px] font-semibold text-lg justify-between"
+                      disabled={!allSongs || allSongs.length === 0 || isEditing}
+                    >
+                      <div className="flex items-center gap-2 overflow-hidden text-left">
+                        {currentSong?.artworkUrl ? (
+                          <Image
+                            src={currentSong.artworkUrl}
+                            alt={currentSong.title}
+                            width={24}
+                            height={24}
+                            className="rounded-sm"
+                          />
+                        ) : (
+                          <Music className="h-5 w-5 flex-shrink-0" />
+                        )}
+                        <span className="truncate">
+                          {currentSong?.title ?? 'Wähle einen Song...'}
+                        </span>
+                      </div>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                    <div className="p-2 border-b">
+                      <Input
+                        placeholder="Song suchen..."
+                        value={songSearch}
+                        onChange={(e) => setSongSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto p-1">
+                      {filteredSongs.length === 0 ? (
+                        <p className="p-2 text-center text-sm text-muted-foreground">
+                          Kein Song gefunden.
+                        </p>
+                      ) : (
+                        filteredSongs.map((songItem) => (
+                          <Button
+                            key={songItem.id}
+                            variant="ghost"
+                            className="w-full justify-start h-auto p-2 text-left"
+                            onClick={() => {
+                              handleSongChange(songItem.id);
+                              setSongSelectorOpen(false);
+                            }}
+                          >
+                            <div className="flex items-center gap-3 w-full">
+                              {songItem.artworkUrl ? (
+                                <Image
+                                  src={songItem.artworkUrl}
+                                  alt={songItem.title}
+                                  width={32}
+                                  height={32}
+                                  className="rounded-sm object-cover"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 flex items-center justify-center bg-muted rounded-sm text-muted-foreground flex-shrink-0">
+                                  <Music className="h-4 w-4" />
+                                </div>
+                              )}
+                              <div className="flex-1 overflow-hidden">
+                                <div className="font-medium truncate">
+                                  {songItem.title}
+                                </div>
+                                <div className="text-sm text-muted-foreground truncate">
+                                  {songItem.artist}
+                                </div>
+                              </div>
+                              {session.songId === songItem.id && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </div>
+                          </Button>
+                        ))
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               ) : (
                 <span className="font-semibold text-lg">
                   {currentSong?.title || 'SyncScroll'}
@@ -433,46 +518,72 @@ function SessionPageContent() {
             </PopoverContent>
           </Popover>
 
+          <div className="flex items-center gap-1.5">
+            <Switch
+              id="show-chords"
+              checked={showChords}
+              onCheckedChange={setShowChords}
+              disabled={isEditing}
+            />
+            <Label htmlFor="show-chords" className="text-sm hidden sm:block">
+              Akkorde
+            </Label>
+          </div>
+
           {isHost && (
             <div className="flex items-center gap-1">
               {isEditing ? (
-                 <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={handleCancelEdit}>
-                        <X className="h-4 w-4"/>
-                    </Button>
-                    <Button size="icon" className="h-8 w-8 bg-green-600 hover:bg-green-700" onClick={handleSaveEdits}>
-                        <Save className="h-4 w-4"/>
-                    </Button>
-                 </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={handleCancelEdit}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    className="h-8 w-8 bg-green-600 hover:bg-green-700"
+                    onClick={handleSaveEdits}
+                  >
+                    <Save className="h-4 w-4" />
+                  </Button>
+                </div>
               ) : (
                 <>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsEditing(true)}>
-                    <Pencil className="h-4 w-4"/>
-                </Button>
-                <div className="flex items-center gap-1 rounded-md bg-muted p-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => handleTranspose(-1)}
-                >
-                  <Minus className="h-4 w-4" />
-                </Button>
-                <span className="font-mono text-sm font-semibold w-8 text-center">
-                  {(session?.transpose || 0) > 0
-                    ? `+${session?.transpose}`
-                    : session?.transpose || 0}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => handleTranspose(1)}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              </>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => handleTranspose(-1)}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="font-mono text-sm font-semibold w-8 text-center">
+                      {(session?.transpose || 0) > 0
+                        ? `+${session?.transpose}`
+                        : session?.transpose || 0}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => handleTranspose(1)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -540,6 +651,7 @@ function SessionPageContent() {
             isEditing={isEditing}
             sheet={editedSheet}
             onSheetChange={setEditedSheet}
+            showChords={showChords}
           />
         )}
         {!currentSong && !currentSongLoading && (

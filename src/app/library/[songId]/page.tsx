@@ -23,6 +23,8 @@ import { useDoc, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Song, SongSheet } from '@/lib/types';
 import { doc, updateDoc } from 'firebase/firestore';
 import { UserNav } from '@/components/user-nav';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 function SongPageContent() {
   const params = useParams();
@@ -37,6 +39,7 @@ function SongPageContent() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedSheet, setEditedSheet] = useState<SongSheet | null>(null);
   const [transpose, setTranspose] = useState(0);
+  const [showChords, setShowChords] = useState(true);
 
   const songRef = useMemoFirebase(
     () => (firestore ? doc(firestore, 'songs', songId) : null),
@@ -135,7 +138,18 @@ function SongPageContent() {
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <Switch
+                id="show-chords"
+                checked={showChords}
+                onCheckedChange={setShowChords}
+                disabled={isEditing}
+              />
+              <Label htmlFor="show-chords" className="text-sm hidden sm:block">
+                Akkorde
+              </Label>
+            </div>
             {isEditing ? (
               <div className="flex items-center gap-1">
                 <Button
@@ -206,6 +220,7 @@ function SongPageContent() {
             isEditing={isEditing}
             sheet={editedSheet}
             onSheetChange={setEditedSheet}
+            showChords={showChords}
           />
         )}
       </main>
