@@ -51,6 +51,23 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
 import { UserNav } from '@/components/user-nav';
 import { generateSongSheet } from '@/ai/flows/generate-song-sheet-flow';
 import { Label } from '@/components/ui/label';
@@ -64,6 +81,8 @@ function LibraryPage() {
   const [songTitle, setSongTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false);
+  const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
 
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -105,7 +124,8 @@ function LibraryPage() {
       toast({
         variant: 'destructive',
         title: 'Keine Berechtigung',
-        description: 'Sie haben nicht die nötige Berechtigung, um Songs zu generieren.',
+        description:
+          'Sie haben nicht die nötige Berechtigung, um Songs zu generieren.',
       });
       return;
     }
@@ -182,7 +202,7 @@ function LibraryPage() {
   };
 
   const handleDelete = async (songToDelete: Song) => {
-    if (!firestore || !user || user.uid !== songToDelete.userId) return;
+    if (!firestore || !user || (user.uid !== songToDelete.userId && userProfile?.role !== 'admin') ) return;
     try {
       const docRef = doc(firestore, 'songs', songToDelete.id);
       await deleteDoc(docRef);
@@ -227,6 +247,14 @@ function LibraryPage() {
       });
     }
   };
+  
+  const handleStartSession = async () => {
+    if (selectedSongId) {
+        await createSession(selectedSongId);
+        setIsSessionDialogOpen(false);
+        setSelectedSongId(null);
+    }
+  };
 
   if (userLoading || userProfileLoading) {
     return (
@@ -236,13 +264,18 @@ function LibraryPage() {
     );
   }
 
-  if (!user || !userProfile || (userProfile.role !== 'creator' && userProfile.role !== 'admin')) {
+  if (
+    !user ||
+    !userProfile ||
+    (userProfile.role !== 'creator' && userProfile.role !== 'admin')
+  ) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-background text-center p-4">
         <LibraryIcon className="h-16 w-16 text-primary mb-4" />
         <h2 className="text-2xl font-bold">Zugriff verweigert</h2>
         <p className="text-muted-foreground mt-2 mb-6">
-          Sie müssen ein "Creator" oder "Admin" sein, um die Bibliothek zu sehen.
+          Sie müssen ein "Creator" oder "Admin" sein, um die Bibliothek zu
+          sehen.
         </p>
         <Button onClick={() => router.push('/')}>
           <LogIn className="mr-2" />
@@ -251,7 +284,7 @@ function LibraryPage() {
       </div>
     );
   }
-  
+
   const canGenerate =
     userProfile?.role === 'creator' || userProfile?.role === 'admin';
 
@@ -265,7 +298,52 @@ function LibraryPage() {
           <LibraryIcon className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold text-foreground">Bibliothek</h1>
         </div>
-        <UserNav />
+        <div className="flex items-center gap-4">
+          {canGenerate && (
+             <Dialog open={isSessionDialogOpen} onOpenChange={setIsSessionDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Share2 className="mr-2 h-4 w-4" /> Session starten
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Neue Session starten</DialogTitle>
+                  <DialogDescription>
+                    Wählen Sie einen Song aus, um eine neue Live-Sitzung zu starten.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  {songsLoading ? (
+                    <div className='flex justify-center'>
+                      <Loader2 className="animate-spin" />
+                    </div>
+                  ) : (
+                    <Select onValueChange={setSelectedSongId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wählen Sie einen Song..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {songs?.map((song) => (
+                          <SelectItem key={song.id} value={song.id}>
+                            {song.title} - {song.artist}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsSessionDialogOpen(false)}>Abbrechen</Button>
+                  <Button onClick={handleStartSession} disabled={!selectedSongId || songsLoading}>
+                    Session jetzt starten
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+          <UserNav />
+        </div>
       </header>
 
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -279,8 +357,14 @@ function LibraryPage() {
               <CardDescription>
                 Geben Sie einen Songtitel und Künstler an. Unsere KI generiert
                 automatisch ein Song-Sheet mit Text und Akkorden.
-                 {userProfile?.role === 'creator' &&
-                  ` (${5 - ((userProfile.lastGenerationDate === new Date().toISOString().split('T')[0]) ? userProfile.songsGeneratedToday : 0)}/5 heute übrig)`}
+                {userProfile?.role === 'creator' &&
+                  ` (${
+                    5 -
+                    (userProfile.lastGenerationDate ===
+                    new Date().toISOString().split('T')[0]
+                      ? userProfile.songsGeneratedToday
+                      : 0)
+                  }/5 heute übrig)`}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -364,45 +448,37 @@ function LibraryPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="flex-grow"></CardContent>
-                <CardFooter className="flex justify-between items-center gap-2">
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    onClick={() => createSession(songItem.id)}
-                  >
-                    <Share2 className="mr-2 h-4 w-4" />
-                    Session starten
-                  </Button>
-                  {(user && user.uid === songItem.userId) ||
-                    (userProfile?.role === 'admin' && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive" size="icon">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Sind Sie sicher?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Diese Aktion kann nicht rückgängig gemacht
-                              werden. Dadurch wird das Song-Sheet dauerhaft
-                              gelöscht.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDelete(songItem)}
-                            >
-                              Löschen
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    ))}
+                <CardFooter className="flex justify-end">
+                  {((user && user.uid === songItem.userId) ||
+                    userProfile?.role === 'admin') && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="icon">
+                          <Trash2 className="h-4 w-4" />
+                           <span className="sr-only">Löschen</span>
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Sind Sie sicher?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Diese Aktion kann nicht rückgängig gemacht werden.
+                            Dadurch wird das Song-Sheet dauerhaft gelöscht.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDelete(songItem)}
+                          >
+                            Löschen
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </CardFooter>
               </Card>
             ))}
