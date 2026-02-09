@@ -157,11 +157,11 @@ export default function SongViewer({
             {part.lines.map((line, lineIndex) => (
               <div key={lineIndex} className="flex flex-col mb-1 font-code text-sm sm:text-base">
                 {line.chords && (
-                  <div className="text-primary font-bold whitespace-pre">
+                  <div className="text-primary font-bold whitespace-pre-wrap">
                     {line.chords}
                   </div>
                 )}
-                <div className="whitespace-pre">{line.text}</div>
+                <div className="whitespace-pre-wrap">{line.text}</div>
               </div>
             ))}
           </div>
