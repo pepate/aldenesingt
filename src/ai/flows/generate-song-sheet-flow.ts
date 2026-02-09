@@ -58,12 +58,37 @@ export async function generateSongSheet(
   return generateSongSheetFlow(input);
 }
 
+// The prompt's input can optionally include the lyrics
+const PromptInputSchema = GenerateSongSheetInputSchema.extend({
+  lyrics: z
+    .string()
+    .optional()
+    .describe(
+      'The verified lyrics of the song. If provided, the AI must use these lyrics exactly.'
+    ),
+});
+
 const prompt = ai.definePrompt({
   name: 'generateSongSheetPrompt',
-  input: { schema: GenerateSongSheetInputSchema },
+  input: { schema: PromptInputSchema },
   output: { schema: GenerateSongSheetOutputSchema },
   prompt: `You are a meticulous and highly accurate music archivist. Your primary goal is to create a factually correct and precise song sheet. It is critical that you do not invent, guess, or hallucinate any lyrics or chords. Your reputation depends on your accuracy.
 
+Analyze the following song:
+Song Title: {{title}}
+Artist: {{artist}}
+
+{{#if lyrics}}
+The exact lyrics for the song are provided below. Your task is to:
+1.  Use the provided lyrics VERBATIM. Do not change, add, or remove a single word. Structure them into parts (verse, chorus, etc.) as appropriate.
+2.  Add the correct chords for each line of text. The chords must be precisely aligned above the corresponding syllables of the lyrics. Use spaces to ensure perfect alignment for musicians. If a line contains no chords, the 'chords' field must be an empty string.
+3.  Fill out the other metadata fields (releaseDate, genre, key) with accurate information based on the song.
+
+Provided Lyrics:
+---
+{{{lyrics}}}
+---
+{{else}}
 Generate a detailed and accurate song sheet for the given song, adhering strictly to the JSON format provided.
 
 Please provide the following information:
@@ -78,11 +103,8 @@ Please provide the following information:
     - chords: The correct chords for that line of text. The chords must be precisely aligned above the corresponding syllables of the lyrics. Use spaces to ensure perfect alignment for musicians. If a line contains no chords, this field must be an empty string.
     - text: The exact, verbatim lyrics for that line.
 
-Analyze the following song:
-Song Title: {{title}}
-Artist: {{artist}}
-
-Generate the complete and accurate song sheet. Do not improvise or add any information that is not widely recognized as part of the official song. The accuracy of the lyrics and chord placements is of utmost importance.`,
+Generate the complete and accurate song sheet. Do not improvise or add any information that is not widely recognized as part of the official song. The accuracy of the lyrics and chord placements is of utmost importance.
+{{/if}}`,
 });
 
 const generateSongSheetFlow = ai.defineFlow(
@@ -92,15 +114,38 @@ const generateSongSheetFlow = ai.defineFlow(
     outputSchema: GenerateSongSheetOutputSchema,
   },
   async (input) => {
-    // 1. Get song sheet from Gemini
-    const { output } = await prompt(input);
+    // 1. Try to fetch lyrics from lyrics.ovh
+    let lyrics: string | undefined = undefined;
+    try {
+      const lyricsResponse = await fetch(
+        `https://api.lyrics.ovh/v1/${encodeURIComponent(
+          input.artist
+        )}/${encodeURIComponent(input.title)}`
+      );
+      if (lyricsResponse.ok) {
+        const lyricsData = await lyricsResponse.json();
+        if (lyricsData.lyrics) {
+          // Clean up lyrics fetched from the API
+          lyrics = lyricsData.lyrics.replace(/(\r\n|\r)/g, '\n').trim();
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch lyrics from lyrics.ovh, proceeding without them.', e);
+      // Do not throw, proceed without pre-fetched lyrics.
+      // The prompt will handle the case where lyrics are not provided.
+    }
+
+    // 2. Get song sheet from Gemini, providing lyrics if they were found
+    const promptInput = lyrics ? { ...input, lyrics } : input;
+    const { output } = await prompt(promptInput);
+
     if (!output) {
       throw new Error(
         'Failed to generate song sheet. The model did not return any output.'
       );
     }
 
-    // 2. Fetch artwork from iTunes
+    // 3. Fetch artwork from iTunes
     let artworkUrl: string | undefined = undefined;
     try {
       const searchTerm = encodeURIComponent(`${input.artist} ${input.title}`);
