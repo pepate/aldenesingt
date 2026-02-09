@@ -7,8 +7,11 @@ import {
   DocumentData,
   FirestoreError,
   QuerySnapshot,
+  CollectionReference,
 } from 'firebase/firestore';
 import { useFirebase } from '../use-firebase';
+import { errorEmitter } from '../error-emitter';
+import { FirestorePermissionError } from '../errors';
 
 export const useCollection = <T extends DocumentData>(query: Query | null) => {
   const { firestore } = useFirebase();
@@ -35,10 +38,21 @@ export const useCollection = <T extends DocumentData>(query: Query | null) => {
         setLoading(false);
         setError(null);
       },
-      (err: FirestoreError) => {
+      async (err: FirestoreError) => {
         setError(err);
         setLoading(false);
-        console.error(err);
+        if (err.code === 'permission-denied' && query) {
+          // A CollectionReference has a path, but a general Query might not.
+          // This provides the path for context where possible.
+          const path = (query as CollectionReference)?.path || 'Unbekannte Sammlung';
+          const permissionError = new FirestorePermissionError({
+            path: path,
+            operation: 'list',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        } else {
+            console.error(err);
+        }
       }
     );
 

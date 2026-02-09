@@ -12,7 +12,9 @@ import {
   Loader2,
   AlertTriangle,
   Users,
+  QrCode,
 } from 'lucide-react';
+import QRCode from 'react-qr-code';
 
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -29,6 +31,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import {
@@ -37,6 +48,8 @@ import {
   useCollection,
   useFirebase,
   useMemoFirebase,
+  errorEmitter,
+  FirestorePermissionError,
 } from '@/firebase';
 import type { Session, PdfDocument, SessionParticipant } from '@/lib/types';
 import {
@@ -56,6 +69,12 @@ function SessionPageContent() {
   const { firestore } = useFirebase();
   const { user } = useUser();
   const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+  const [sessionUrl, setSessionUrl] = useState('');
+  
+  useEffect(() => {
+    // Ensure this runs only on the client
+    setSessionUrl(window.location.href);
+  }, []);
 
   const sessionId = Array.isArray(params.sessionId)
     ? params.sessionId[0].toUpperCase()
@@ -105,6 +124,8 @@ function SessionPageContent() {
   // Effect to handle session errors (like permissions)
   useEffect(() => {
     if (sessionError) {
+      // The useDoc hook now emits a contextual error, which is handled by FirebaseErrorListener
+      // We can keep this for catastrophic failures or redirection.
       toast({
         variant: 'destructive',
         title: 'Fehler bei der Sitzung',
@@ -149,17 +170,40 @@ function SessionPageContent() {
       'sessionParticipants',
       user.uid
     );
-
-    setDoc(participantRef, {
+    const participantData = {
       userId: user.uid,
       sessionId: sessionId,
       joinedAt: serverTimestamp(),
       displayName: user.displayName,
       photoURL: user.photoURL,
+    };
+
+    setDoc(participantRef, participantData).catch(async (serverError) => {
+      if (serverError.code === 'permission-denied') {
+        const permissionError = new FirestorePermissionError({
+          path: participantRef.path,
+          operation: 'create',
+          requestResourceData: participantData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      } else {
+        console.error('Failed to join session:', serverError);
+      }
     });
 
     return () => {
-      deleteDoc(participantRef);
+      deleteDoc(participantRef).catch(async (serverError) => {
+        if (serverError.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: participantRef.path,
+            operation: 'delete',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        } else {
+          // This might fire benignly on page unload, so we don't show a toast.
+          console.error('Failed to leave session:', serverError);
+        }
+      });
     };
   }, [user, firestore, sessionId, session]);
 
@@ -182,12 +226,12 @@ function SessionPageContent() {
     }
   };
 
-  const copySessionId = () => {
-    if (sessionId) {
-      navigator.clipboard.writeText(sessionId);
+  const copyUrlToClipboard = () => {
+    if (sessionUrl) {
+      navigator.clipboard.writeText(sessionUrl);
       toast({
         title: 'Kopiert!',
-        description: 'Sitzungs-ID wurde in die Zwischenablage kopiert.',
+        description: 'Sitzungs-Link wurde in die Zwischenablage kopiert.',
       });
     }
   };
@@ -323,20 +367,43 @@ function SessionPageContent() {
               {isHost ? 'HOST' : 'ZUSCHAUER'}
             </span>
           </div>
-          <div className="flex items-center gap-1 rounded-md border p-2">
-            <span className="font-mono text-sm font-semibold text-muted-foreground">
-              ID: {sessionId}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={copySessionId}
-              className="h-7 w-7"
-            >
-              <Copy className="h-4 w-4" />
-              <span className="sr-only">Sitzungs-ID kopieren</span>
-            </Button>
-          </div>
+           <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <QrCode className="mr-2 h-4 w-4" />
+                Teilen
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Sitzung teilen</DialogTitle>
+                <DialogDescription>
+                  Andere können den QR-Code scannen oder den Link verwenden, um
+                  sofort beizutreten.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col items-center justify-center pt-4 gap-4">
+                {sessionUrl ? (
+                  <QRCode value={sessionUrl} size={200} />
+                ) : (
+                  <div className="h-[200px] w-[200px] flex items-center justify-center bg-muted rounded-md">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                )}
+                <div className="flex items-center w-full space-x-2">
+                  <Input value={sessionUrl} readOnly className="flex-1" />
+                  <Button
+                    onClick={copyUrlToClipboard}
+                    size="icon"
+                    variant="outline"
+                  >
+                    <span className="sr-only">Link kopieren</span>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <UserNav />
         </div>
       </header>

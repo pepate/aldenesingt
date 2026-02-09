@@ -8,6 +8,8 @@ import {
   DocumentSnapshot,
 } from 'firebase/firestore';
 import { useFirebase } from '../use-firebase';
+import { errorEmitter } from '../error-emitter';
+import { FirestorePermissionError } from '../errors';
 
 export const useDoc = <T extends DocumentData>(
   docRef: DocumentReference | null
@@ -36,10 +38,18 @@ export const useDoc = <T extends DocumentData>(
         setLoading(false);
         setError(null);
       },
-      (err: FirestoreError) => {
+      async (err: FirestoreError) => {
         setError(err);
         setLoading(false);
-        console.error(err);
+        if (err.code === 'permission-denied' && docRef) {
+          const permissionError = new FirestorePermissionError({
+            path: docRef.path,
+            operation: 'get',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        } else {
+            console.error(err);
+        }
       }
     );
 

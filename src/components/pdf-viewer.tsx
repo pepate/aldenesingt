@@ -4,6 +4,7 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { DocumentReference, onSnapshot, updateDoc } from 'firebase/firestore';
 import type { Session } from '@/lib/types';
+import { errorEmitter, FirestorePermissionError } from '@/firebase';
 
 interface PdfViewerProps {
   songUrl: string;
@@ -37,8 +38,17 @@ export default function PdfViewer({
   const sendScrollUpdate = useCallback(
     (scrollTop: number) => {
       if (sessionRef) {
-        updateDoc(sessionRef, { scroll: scrollTop }).catch((error) => {
-          console.error('Failed to send scroll update:', error);
+        updateDoc(sessionRef, { scroll: scrollTop }).catch(async (error) => {
+          if (error.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+              path: sessionRef.path,
+              operation: 'update',
+              requestResourceData: { scroll: scrollTop },
+            });
+            errorEmitter.emit('permission-error', permissionError);
+          } else {
+            console.error('Failed to send scroll update:', error);
+          }
         });
       }
     },
@@ -69,14 +79,33 @@ export default function PdfViewer({
   useEffect(() => {
     if (isHost || !sessionRef) return;
 
-    const unsubscribe = onSnapshot(sessionRef, (doc) => {
-      const newScroll = doc.data()?.scroll;
-      const container = scrollContainerRef.current;
-      if (container && newScroll !== undefined && Math.abs(container.scrollTop - newScroll) > 10) {
-        isUpdatingByListener.current = true;
-        container.scrollTo({ top: newScroll, behavior: 'smooth' });
+    const unsubscribe = onSnapshot(
+      sessionRef,
+      (doc) => {
+        const newScroll = doc.data()?.scroll;
+        const container = scrollContainerRef.current;
+        if (
+          container &&
+          newScroll !== undefined &&
+          Math.abs(container.scrollTop - newScroll) > 10
+        ) {
+          isUpdatingByListener.current = true;
+          container.scrollTo({ top: newScroll, behavior: 'smooth' });
+        }
+      },
+      async (error) => {
+        // This is a read operation, so we emit a 'get' error
+        if (error.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: sessionRef.path,
+            operation: 'get',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        } else {
+          console.error('Error on session snapshot listener:', error);
+        }
       }
-    });
+    );
 
     return () => unsubscribe();
   }, [isHost, sessionRef]);
