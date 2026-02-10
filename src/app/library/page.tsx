@@ -41,7 +41,7 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import type { Song, UserProfile } from '@/lib/types';
+import type { Song, SongSheet, SongPart } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -81,9 +81,80 @@ import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { UserNav } from '@/components/user-nav';
-import { generateSongSheet } from '@/ai/flows/generate-song-sheet-flow';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+
+// This new parser converts the complex Songsterr player data into our app's format
+function parseSongsterrToSheet(songsterrData: any): SongSheet {
+  const track = songsterrData.song.track;
+  if (!track) throw new Error("Song data does not contain a track.");
+
+  const sheet: SongSheet = {
+      releaseDate: String(songsterrData.song.year || ""),
+      genre: songsterrData.song.genres?.[0]?.name || "",
+      key: "", // Not available in songsterr data
+      song: [],
+  };
+
+  let currentPart: SongPart | null = null;
+  let currentTextLine = "";
+  let currentChordLine = "";
+  let textSinceLastChord = "";
+
+  for (const measure of track.measure) {
+      if (measure.marker) {
+          if (currentPart && currentTextLine.trim()) {
+              currentPart.lines.push({ text: currentTextLine, chords: currentChordLine });
+          }
+          currentTextLine = "";
+          currentChordLine = "";
+          textSinceLastChord = "";
+          currentPart = { part: measure.marker.title, lines: [] };
+          sheet.song.push(currentPart);
+      }
+
+      if (!currentPart) continue;
+      
+      for (const voice of measure.voice) {
+          for (const beat of voice.beat) {
+              // Add chord if it exists
+              if (beat.chord?.name) {
+                  currentChordLine += textSinceLastChord.replace(/[^\s]/g, ' ');
+                  currentChordLine += beat.chord.name;
+                  textSinceLastChord = "";
+              }
+
+              // Add lyrics if they exist
+              if (beat.voice?.lyrics) {
+                  const lyrics = beat.voice.lyrics.text || "";
+                  const parts = lyrics.split('\r');
+                  for (let i = 0; i < parts.length; i++) {
+                      const partText = parts[i];
+                      currentTextLine += partText;
+                      textSinceLastChord += partText;
+
+                      if (i < parts.length - 1) { // A newline was found
+                          currentPart.lines.push({ text: currentTextLine, chords: currentChordLine });
+                          currentTextLine = "";
+                          currentChordLine = "";
+                          textSinceLastChord = "";
+                      }
+                  }
+              }
+          }
+      }
+  }
+
+  // Add any remaining line
+  if (currentPart && currentTextLine.trim()) {
+      currentPart.lines.push({ text: currentTextLine, chords: currentChordLine });
+  }
+
+  // Filter out empty parts
+  sheet.song = sheet.song.filter(part => part.lines.some(line => line.text.trim()));
+
+  return sheet;
+}
+
 
 function LibraryPage() {
   const { user, loading: userLoading } = useUser();
@@ -91,17 +162,14 @@ function LibraryPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatingInfo, setGeneratingInfo] = useState<any | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importingInfo, setImportingInfo] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false);
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
-
-  const [lyricsRequest, setLyricsRequest] = useState<any | null>(null);
-  const [manualLyrics, setManualLyrics] = useState('');
 
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -121,7 +189,7 @@ function LibraryPage() {
     error,
   } = useCollection<Song>(songsRef);
 
-  // Debounce iTunes Search
+  // Debounce Songsterr Search
   useEffect(() => {
     if (searchQuery.trim() === '') {
       setSearchResults([]);
@@ -132,17 +200,19 @@ function LibraryPage() {
     const debounceTimer = setTimeout(async () => {
       try {
         const searchTerm = encodeURIComponent(searchQuery);
+        // Using a CORS proxy for Songsterr API as it's not publicly open
         const response = await fetch(
-          `https://itunes.apple.com/search?term=${searchTerm}&entity=song&limit=10`
+          `https://www.songsterr.com/a/ra/songs.json?pattern=${searchTerm}`
         );
+        if (!response.ok) throw new Error('Songsterr API request failed');
         const data = await response.json();
-        setSearchResults(data.results || []);
+        setSearchResults(data || []);
       } catch (error) {
-        console.error('iTunes search failed:', error);
+        console.error('Songsterr search failed:', error);
         toast({
           variant: 'destructive',
           title: 'Suche fehlgeschlagen',
-          description: 'Die Suche nach Songs bei iTunes ist fehlgeschlagen.',
+          description: 'Die Suche nach Songs bei Songsterr ist fehlgeschlagen.',
         });
         setSearchResults([]);
       } finally {
@@ -153,42 +223,55 @@ function LibraryPage() {
     return () => clearTimeout(debounceTimer);
   }, [searchQuery, toast]);
 
-  const generateAndSaveSong = async (track: any, lyrics: string) => {
+  const importFromSongsterr = async (song: any) => {
     if (!user || !firestore || !userProfileRef) return;
 
-    setIsGenerating(true);
-    setGeneratingInfo(track);
-    setLyricsRequest(null); // Close dialog if it was open
-    setManualLyrics('');
+    setIsImporting(true);
+    setImportingInfo(song);
+    setSearchQuery('');
+    setSearchResults([]);
 
     try {
-      const {
-        songtitle,
-        artist: songArtist,
-        sheet,
-        artworkUrl,
-      } = await generateSongSheet({
-        title: track.trackName,
-        artist: track.artistName,
-        lyrics: lyrics,
-      });
+      // 1. Fetch detailed song data from Songsterr
+      const playerResponse = await fetch(`https://www.songsterr.com/a/ra/player/song/${song.id}.json`);
+      if (!playerResponse.ok) throw new Error('Failed to fetch song details from Songsterr.');
+      const songsterrData = await playerResponse.json();
+      
+      // 2. Parse the complex data into our simple sheet format
+      const sheet = parseSongsterrToSheet(songsterrData);
 
-      if (!sheet || !sheet.song) {
-        throw new Error('Die KI konnte kein gültiges Song-Sheet erstellen.');
+      if (!sheet || !sheet.song || sheet.song.length === 0) {
+        throw new Error('Songsterr data could not be parsed into a valid sheet.');
       }
 
+      // 3. (Optional) Fetch artwork from iTunes for a better UI
+      let artworkUrl: string | undefined = undefined;
+      try {
+        const searchTerm = encodeURIComponent(`${song.artist.name} ${song.title}`);
+        const itunesResponse = await fetch(`https://itunes.apple.com/search?term=${searchTerm}&entity=song&limit=1`);
+        if (itunesResponse.ok) {
+          const itunesData = await itunesResponse.json();
+          if (itunesData.resultCount > 0 && itunesData.results[0].artworkUrl100) {
+            artworkUrl = itunesData.results[0].artworkUrl100.replace('100x100', '400x400');
+          }
+        }
+      } catch (e) {
+        console.warn('Could not fetch artwork from iTunes', e);
+      }
+
+      // 4. Save the new song to Firestore
       const songsCollectionRef = collection(firestore, 'songs');
       await addDoc(songsCollectionRef, {
         userId: user.uid,
         creatorName: user.displayName || user.email || 'Anonym',
-        title: songtitle,
-        artist: songArtist,
+        title: song.title,
+        artist: song.artist.name,
         sheet: sheet,
         createdAt: serverTimestamp(),
         artworkUrl: artworkUrl || null,
       });
 
-      // Update generation count for creators
+      // 5. Update generation count for creators
       if (userProfile?.role === 'creator') {
         const today = new Date().toISOString().split('T')[0];
         const newCount =
@@ -202,100 +285,22 @@ function LibraryPage() {
       }
 
       toast({
-        title: 'Song-Sheet generiert & gespeichert',
-        description: `"${songtitle}" von ${songArtist} wurde zur Bibliothek hinzugefügt.`,
+        title: 'Song importiert & gespeichert',
+        description: `"${song.title}" von ${song.artist.name} wurde zur Bibliothek hinzugefügt.`,
       });
+
     } catch (error: any) {
       console.error('Processing Error: ', error);
       toast({
         variant: 'destructive',
-        title: 'Generierung fehlgeschlagen',
-        description:
-          error.message || 'Das Song-Sheet konnte nicht generiert werden.',
+        title: 'Import fehlgeschlagen',
+        description: error.message || 'Das Song-Sheet konnte nicht importiert werden.',
       });
     } finally {
-      setIsGenerating(false);
-      setGeneratingInfo(null);
+      setIsImporting(false);
+      setImportingInfo(null);
     }
   };
-
-  const handleGenerateSong = async (track: any) => {
-    if (isGenerating) return;
-
-    if (!user || !firestore || !userProfileRef || !userProfile) {
-      toast({
-        variant: 'destructive',
-        title: 'Fehlende Informationen',
-        description: 'Bitte zuerst anmelden.',
-      });
-      return;
-    }
-
-    if (
-      userProfile.role !== 'creator' &&
-      userProfile.role !== 'admin' &&
-      userProfile.role !== 'superadmin'
-    ) {
-      toast({
-        variant: 'destructive',
-        title: 'Keine Berechtigung',
-        description:
-          'Sie haben nicht die nötige Berechtigung, um Songs zu generieren.',
-      });
-      return;
-    }
-
-    // Daily limit check for creators
-    if (userProfile.role === 'creator') {
-      const today = new Date().toISOString().split('T')[0];
-      const songsToday =
-        userProfile.lastGenerationDate === today
-          ? userProfile.songsGeneratedToday || 0
-          : 0;
-
-      if (songsToday >= 5) {
-        toast({
-          variant: 'destructive',
-          title: 'Tageslimit erreicht',
-          description:
-            'Sie haben Ihr Limit von 5 generierten Songs für heute erreicht.',
-        });
-        return;
-      }
-    }
-
-    setGeneratingInfo(track);
-    setSearchQuery('');
-    setSearchResults([]);
-
-    try {
-      const lyricsResponse = await fetch(
-        `https://api.lyrics.ovh/v1/${encodeURIComponent(
-          track.artistName
-        )}/${encodeURIComponent(track.trackName)}`
-      );
-      if (!lyricsResponse.ok) {
-        throw new Error('Lyrics API request failed');
-      }
-      const lyricsData = await lyricsResponse.json();
-      const lyrics = lyricsData.lyrics?.replace(/(\r\n|\r)/g, '\n').trim();
-
-      if (lyrics) {
-        await generateAndSaveSong(track, lyrics);
-      } else {
-        throw new Error('Lyrics not found in API response');
-      }
-    } catch (e) {
-      console.warn('Could not fetch lyrics, prompting user for manual input.');
-      setGeneratingInfo(null);
-      setLyricsRequest(track);
-    }
-  };
-  
-  const handleManualSubmit = async () => {
-    if (!lyricsRequest || !manualLyrics) return;
-    await generateAndSaveSong(lyricsRequest, manualLyrics);
-  }
 
   const handleDelete = async (songToDelete: Song) => {
     if (
@@ -488,10 +493,10 @@ function LibraryPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Sparkles />
-                Neuen Song generieren
+                Neuen Song von Songsterr importieren
               </CardTitle>
               <CardDescription>
-                Suche nach einem Song und wähle ihn aus der Liste aus, um ein
+                Suche nach einem Song und wähle ihn aus, um ein
                 Song-Sheet zu erstellen.
                 {userProfile?.role === 'creator' &&
                   ` (${
@@ -505,41 +510,34 @@ function LibraryPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {generatingInfo ? (
+                {importingInfo ? (
                   <div className="flex items-center gap-4 p-4 border rounded-lg bg-muted/50">
-                    <Image
-                      src={generatingInfo.artworkUrl100.replace(
-                        '100x100',
-                        '80x80'
-                      )}
-                      alt={generatingInfo.trackName}
-                      width={80}
-                      height={80}
-                      className="rounded-md"
-                    />
+                     <div className="w-20 h-20 flex-shrink-0 flex items-center justify-center bg-secondary rounded-md">
+                        <Music className="h-10 w-10 text-muted-foreground" />
+                    </div>
                     <div className="flex-1">
                       <div className="font-semibold">
-                        {generatingInfo.trackName}
+                        {importingInfo.title}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {generatingInfo.artistName}
+                        {importingInfo.artist.name}
                       </div>
                       <div className="flex items-center gap-2 mt-2 text-sm text-primary">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Song-Sheet wird generiert...</span>
+                        <span>Song-Sheet wird importiert...</span>
                       </div>
                     </div>
                   </div>
                 ) : (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="song-search">Song-Suche</Label>
+                      <Label htmlFor="song-search">Songsterr-Suche</Label>
                       <Input
                         id="song-search"
-                        placeholder="z.B. Über den Wolken, Reinhard Mey"
+                        placeholder="z.B. Hotel California, Eagles"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        disabled={isGenerating}
+                        disabled={isImporting}
                       />
                     </div>
 
@@ -552,32 +550,22 @@ function LibraryPage() {
                     {!isSearching && searchResults.length > 0 && (
                       <div className="border rounded-md max-h-72 overflow-y-auto">
                         <ul className="divide-y">
-                          {searchResults.map((track) => (
-                            <li key={track.trackId}>
+                          {searchResults.map((song) => (
+                            <li key={song.id}>
                               <button
                                 className="w-full text-left p-3 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
-                                onClick={() => handleGenerateSong(track)}
-                                disabled={isGenerating}
+                                onClick={() => importFromSongsterr(song)}
+                                disabled={isImporting}
                               >
-                                <Image
-                                  src={track.artworkUrl100.replace(
-                                    '100x100',
-                                    '60x60'
-                                  )}
-                                  alt={track.trackName}
-                                  width={60}
-                                  height={60}
-                                  className="rounded-md"
-                                />
+                                <div className="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-muted rounded-md text-muted-foreground">
+                                    <Music className="h-6 w-6" />
+                                </div>
                                 <div className="flex-1 overflow-hidden">
                                   <div className="font-semibold truncate">
-                                    {track.trackName}
+                                    {song.title}
                                   </div>
                                   <div className="text-sm text-muted-foreground truncate">
-                                    {track.artistName}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground truncate">
-                                    {track.collectionName}
+                                    {song.artist.name}
                                   </div>
                                 </div>
                               </button>
@@ -600,34 +588,6 @@ function LibraryPage() {
           </Card>
         )}
         
-        <Dialog open={!!lyricsRequest} onOpenChange={(open) => !open && setLyricsRequest(null)}>
-            <DialogContent>
-                <DialogHeader>
-                <DialogTitle>Songtext nicht gefunden</DialogTitle>
-                <DialogDescription>
-                    Wir konnten den Songtext für "{lyricsRequest?.trackName}" von "{lyricsRequest?.artistName}" nicht automatisch finden.
-                    Bitte füge den Text manuell ein, damit wir die Akkorde generieren können.
-                </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-2">
-                <Label htmlFor="manual-lyrics">Songtext</Label>
-                <Textarea
-                    id="manual-lyrics"
-                    placeholder="Füge hier den Songtext ein..."
-                    className="h-64 font-mono text-sm"
-                    value={manualLyrics}
-                    onChange={(e) => setManualLyrics(e.target.value)}
-                />
-                </div>
-                <DialogFooter>
-                <Button variant="outline" onClick={() => setLyricsRequest(null)}>Abbrechen</Button>
-                <Button onClick={handleManualSubmit} disabled={!manualLyrics}>
-                    Akkorde generieren
-                </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-
         <div>
           <h2 className="text-2xl font-bold mb-4">Alle Songs</h2>
           {songsLoading && (
@@ -679,7 +639,7 @@ function LibraryPage() {
                 Keine Songs gefunden
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Generieren Sie Ihren ersten Song, um zu beginnen.
+                Importieren Sie Ihren ersten Song, um zu beginnen.
               </p>
             </div>
           )}
