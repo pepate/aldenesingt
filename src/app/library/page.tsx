@@ -41,7 +41,7 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import type { Song, SongSheet, SongPart } from '@/lib/types';
+import type { Song, SongSheet, SongPart, UserProfile } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -202,7 +202,7 @@ function LibraryPage() {
         const searchTerm = encodeURIComponent(searchQuery);
         // Using a CORS proxy for Songsterr API as it's not publicly open
         const response = await fetch(
-          `https://www.songsterr.com/a/ra/songs.json?pattern=${searchTerm}`
+          `https://corsproxy.io/?https://www.songsterr.com/a/ra/songs.json?pattern=${searchTerm}`
         );
         if (!response.ok) throw new Error('Songsterr API request failed');
         const data = await response.json();
@@ -233,7 +233,7 @@ function LibraryPage() {
 
     try {
       // 1. Fetch detailed song data from Songsterr
-      const playerResponse = await fetch(`https://www.songsterr.com/a/ra/player/song/${song.id}.json`);
+      const playerResponse = await fetch(`https://corsproxy.io/?https://www.songsterr.com/a/ra/player/song/${song.id}.json`);
       if (!playerResponse.ok) throw new Error('Failed to fetch song details from Songsterr.');
       const songsterrData = await playerResponse.json();
       
