@@ -100,6 +100,7 @@ function LibraryPage() {
   // Generation flow state
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
+  const [isFetchingLyrics, setIsFetchingLyrics] = useState(false);
   const [generationInfo, setGenerationInfo] = useState<{
     title: string;
     artist: string;
@@ -107,10 +108,7 @@ function LibraryPage() {
   } | null>(null);
   const [lyrics, setLyrics] = useState('');
   const [selectedKey, setSelectedKey] = useState('C');
-  const [generationStep, setGenerationStep] = useState<'loading' | 'input'>(
-    'loading'
-  );
-
+  
   // Session dialog state
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false);
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
@@ -165,43 +163,46 @@ function LibraryPage() {
     return () => clearTimeout(debounceTimer);
   }, [searchQuery, toast]);
 
-  const handleSelectSong = async (song: any) => {
+  const handleSelectSong = (song: any) => {
     setGenerationInfo({
       title: song.trackName,
       artist: song.artistName,
       artworkUrl: song.artworkUrl100?.replace('100x100', '400x400'),
     });
+    setLyrics(''); // Clear previous lyrics
     setGenerationDialogOpen(true);
-    setGenerationStep('loading');
+    setIsFetchingLyrics(true);
     setSearchQuery('');
     setSearchResults([]);
 
-    try {
-      // Fetch lyrics from proxy
-      const lyricsResponse = await fetch(
-        `/api/lyrics/${encodeURIComponent(
-          song.artistName
-        )}/${encodeURIComponent(song.trackName)}`
-      );
-      if (lyricsResponse.ok) {
-        const data = await lyricsResponse.json();
-        if (data.lyrics) {
-          setLyrics(data.lyrics);
+    const fetchLyrics = async () => {
+      try {
+        const lyricsResponse = await fetch(
+          `/api/lyrics/${encodeURIComponent(
+            song.artistName
+          )}/${encodeURIComponent(song.trackName)}`
+        );
+        if (lyricsResponse.ok) {
+          const data = await lyricsResponse.json();
+          if (data.lyrics) {
+            setLyrics(data.lyrics);
+          } else {
+            setLyrics('');
+          }
         } else {
-          // If API returns ok but no lyrics, prompt user
           setLyrics('');
         }
-      } else {
-        // If API fails, prompt user
+      } catch (e) {
+        console.error('Lyrics fetch error', e);
         setLyrics('');
+      } finally {
+        setIsFetchingLyrics(false);
       }
-    } catch (e) {
-      console.error('Lyrics fetch error', e);
-      setLyrics(''); // Ensure we prompt user on error
-    } finally {
-      setGenerationStep('input');
-    }
+    };
+
+    fetchLyrics();
   };
+
 
   const handleGenerateSheet = async () => {
     if (!user || !firestore || !generationInfo || !lyrics || !selectedKey) {
@@ -549,31 +550,31 @@ function LibraryPage() {
                 Wählen Sie eine Tonart und bestätigen Sie den Text, um die Akkorde zu generieren.
               </DialogDescription>
             </DialogHeader>
-            {generationStep === 'loading' ? (
-              <div className="flex items-center justify-center p-8">
-                <Loader2 className="h-8 w-8 animate-spin" />
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="key" className="text-right">
+                  Tonart
+                </Label>
+                <Select value={selectedKey} onValueChange={setSelectedKey}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Tonart auswählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MUSIC_KEYS.map(key => (
+                      <SelectItem key={key} value={key}>{key}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            ) : (
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="key" className="text-right">
-                    Tonart
-                  </Label>
-                  <Select value={selectedKey} onValueChange={setSelectedKey}>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Tonart auswählen" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MUSIC_KEYS.map(key => (
-                        <SelectItem key={key} value={key}>{key}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-start gap-4">
-                  <Label htmlFor="lyrics" className="text-right pt-2">
-                    Songtext
-                  </Label>
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label htmlFor="lyrics" className="text-right pt-2">
+                  Songtext
+                </Label>
+                {isFetchingLyrics ? (
+                  <div className="col-span-3 min-h-[200px] flex items-center justify-center bg-muted rounded-md">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
                   <Textarea
                     id="lyrics"
                     value={lyrics}
@@ -581,9 +582,9 @@ function LibraryPage() {
                     className="col-span-3 min-h-[200px]"
                     placeholder="Songtext hier einfügen, falls er nicht automatisch gefunden wurde."
                   />
-                </div>
+                )}
               </div>
-            )}
+            </div>
             <DialogFooter>
               <Button
                 variant="outline"
@@ -592,7 +593,7 @@ function LibraryPage() {
               >
                 Abbrechen
               </Button>
-              <Button onClick={handleGenerateSheet} disabled={isGenerating || !lyrics}>
+              <Button onClick={handleGenerateSheet} disabled={isGenerating || isFetchingLyrics || !lyrics}>
                 {isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Generieren
               </Button>
