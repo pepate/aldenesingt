@@ -35,7 +35,7 @@ const SongSheetSchema = z.object({
     .describe('The structured song with all its parts.'),
 });
 
-export const GenerateSongSheetInputSchema = z.object({
+const GenerateSongSheetInputSchema = z.object({
   artist: z.string(),
   title: z.string(),
   lyrics: z.string().describe('The full lyrics for the song.'),
@@ -43,6 +43,7 @@ export const GenerateSongSheetInputSchema = z.object({
     .string()
     .describe('The desired musical key for the chord generation.'),
 });
+
 export type GenerateSongSheetInput = z.infer<
   typeof GenerateSongSheetInputSchema
 >;
