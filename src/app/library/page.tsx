@@ -83,76 +83,88 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { UserNav } from '@/components/user-nav';
 import { Label } from '@/components/ui/label';
 
-// This new parser converts the complex Songsterr player data into our app's format
+// This new, more robust parser converts the complex Songsterr player data into our app's format
 function parseSongsterrToSheet(songsterrData: any): SongSheet {
-  const track = songsterrData.song.track;
-  if (!track) throw new Error("Song data does not contain a track.");
+    const track = songsterrData.song.track;
+    if (!track) throw new Error("Song data does not contain a track.");
 
-  const sheet: SongSheet = {
-      releaseDate: String(songsterrData.song.year || ""),
-      genre: songsterrData.song.genres?.[0]?.name || "",
-      key: "", // Not available in songsterr data
-      song: [],
-  };
+    const sheet: SongSheet = {
+        releaseDate: String(songsterrData.song.year || ""),
+        genre: songsterrData.song.genres?.[0]?.name || "",
+        key: "", // Not available in songsterr data
+        song: [],
+    };
 
-  let currentPart: SongPart | null = null;
-  let currentTextLine = "";
-  let currentChordLine = "";
-  let textSinceLastChord = "";
+    let currentPart: SongPart | null = null;
+    
+    // This array will hold fragments of { chord: 'Am', text: 'ly-ric' }
+    let lineFragments: { chord: string | null, text: string }[] = [];
 
-  for (const measure of track.measure) {
-      if (measure.marker) {
-          if (currentPart && currentTextLine.trim()) {
-              currentPart.lines.push({ text: currentTextLine, chords: currentChordLine });
-          }
-          currentTextLine = "";
-          currentChordLine = "";
-          textSinceLastChord = "";
-          currentPart = { part: measure.marker.title, lines: [] };
-          sheet.song.push(currentPart);
-      }
+    const finalizeLine = () => {
+        if (!currentPart || lineFragments.length === 0) {
+            lineFragments = [];
+            return;
+        }
 
-      if (!currentPart) continue;
+        const chordLine = lineFragments.map(f => (f.chord || '').padEnd(f.text.length)).join('');
+        const textLine = lineFragments.map(f => f.text).join('');
+
+        if (textLine.trim()) {
+            currentPart.lines.push({ chords: chordLine, text: textLine });
+        }
+        lineFragments = [];
+    };
+
+    for (const measure of track.measure) {
+        if (measure.marker) {
+            finalizeLine(); // Finalize previous line before starting a new part
+            
+            currentPart = { part: measure.marker.title, lines: [] };
+            sheet.song.push(currentPart);
+        }
+
+        if (!currentPart) continue;
       
-      for (const voice of measure.voice) {
-          for (const beat of voice.beat) {
-              // Add chord if it exists
-              if (beat.chord?.name) {
-                  currentChordLine += textSinceLastChord.replace(/[^\s]/g, ' ');
-                  currentChordLine += beat.chord.name;
-                  textSinceLastChord = "";
-              }
+        for (const voice of measure.voice) {
+            for (const beat of voice.beat) {
+                const chord = beat.chord?.name || null;
+                const lyrics = beat.voice?.lyrics?.text || "";
+                
+                if (chord && lineFragments.length > 0 && lineFragments[lineFragments.length - 1].chord) {
+                    // If the last fragment already has a chord, this new chord belongs to an empty text fragment
+                    lineFragments.push({ chord: chord, text: '' });
+                }
 
-              // Add lyrics if they exist
-              if (beat.voice?.lyrics) {
-                  const lyrics = beat.voice.lyrics.text || "";
-                  const parts = lyrics.split('\r');
-                  for (let i = 0; i < parts.length; i++) {
-                      const partText = parts[i];
-                      currentTextLine += partText;
-                      textSinceLastChord += partText;
+                const lyricParts = lyrics.split('\r');
 
-                      if (i < parts.length - 1) { // A newline was found
-                          currentPart.lines.push({ text: currentTextLine, chords: currentChordLine });
-                          currentTextLine = "";
-                          currentChordLine = "";
-                          textSinceLastChord = "";
-                      }
-                  }
-              }
-          }
-      }
-  }
+                lyricParts.forEach((lyricPart, index) => {
+                    if (index > 0) { // Newline was found
+                        finalizeLine();
+                    }
 
-  // Add any remaining line
-  if (currentPart && currentTextLine.trim()) {
-      currentPart.lines.push({ text: currentTextLine, chords: currentChordLine });
-  }
+                    if (lyricPart) {
+                        const lastFragment = lineFragments[lineFragments.length - 1];
+                        if (chord && lineFragments.length > 0 && !lastFragment.chord) {
+                           // If there's a pending chord and the last fragment doesn't have one, assign it
+                           lastFragment.chord = chord;
+                           lastFragment.text += lyricPart;
+                        } else {
+                           lineFragments.push({ chord: chord, text: lyricPart });
+                        }
+                    } else if (chord && index === 0) { // Chord with no lyric
+                        lineFragments.push({ chord: chord, text: '' });
+                    }
+                });
+            }
+        }
+    }
 
-  // Filter out empty parts
-  sheet.song = sheet.song.filter(part => part.lines.some(line => line.text.trim()));
+    finalizeLine(); // Add any remaining line
 
-  return sheet;
+    // Filter out empty parts
+    sheet.song = sheet.song.filter(part => part.lines.some(line => line.text.trim()));
+
+    return sheet;
 }
 
 
