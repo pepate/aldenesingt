@@ -87,7 +87,7 @@ export async function generateSongSheet(
         }
       });
       
-      const output = llmResponse.output();
+      const output = llmResponse.output;
       if (!output) {
         throw new Error('AI did not return valid song sheet data.');
       }
