@@ -11,7 +11,6 @@ import {
   Crown,
   Loader2,
   AlertTriangle,
-  Users,
   QrCode,
   Plus,
   Minus,
@@ -45,7 +44,6 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import {
   useDoc,
@@ -112,16 +110,6 @@ function SessionPageContent() {
     loading: sessionLoading,
     error: sessionError,
   } = useDoc<Session>(sessionRef);
-
-  const participantsRef = useMemoFirebase(
-    () =>
-      firestore
-        ? collection(firestore, 'sessions', sessionId, 'sessionParticipants')
-        : null,
-    [firestore, sessionId]
-  );
-  const { data: participants, loading: participantsLoading } =
-    useCollection<SessionParticipant>(participantsRef);
 
   const isHost = session?.hostId === user?.uid;
 
@@ -349,7 +337,6 @@ function SessionPageContent() {
 
   const showLoading =
     sessionLoading ||
-    participantsLoading ||
     songsLoading ||
     currentSongLoading ||
     !initialCheckComplete;
@@ -377,312 +364,285 @@ function SessionPageContent() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <header className="flex items-center justify-between p-3 border-b shrink-0">
-        <div className="flex items-center gap-4">
+      <header className="flex flex-col gap-y-3 p-3 border-b shrink-0">
+        {/* Top Row: Back button and main controls */}
+        <div className="flex w-full items-center justify-between gap-4">
           <Button variant="outline" size="icon" asChild>
             <Link href="/">
               <ArrowLeft />
               <span className="sr-only">Zurück zur Startseite</span>
             </Link>
           </Button>
-          <div className="flex items-center gap-2">
-            <Music className="h-6 w-6 text-primary" />
-            <div className="block">
-              {isHost ? (
-                <Popover
-                  open={songSelectorOpen}
-                  onOpenChange={setSongSelectorOpen}
+          <div className="flex items-center justify-end flex-wrap gap-x-2 sm:gap-x-4 gap-y-2">
+            <div className="flex items-center gap-1.5">
+              <Switch
+                id="show-chords"
+                checked={showChords}
+                onCheckedChange={setShowChords}
+                disabled={isEditing}
+              />
+              <Label htmlFor="show-chords" className="text-sm hidden sm:block">
+                Akkorde
+              </Label>
+            </div>
+
+            {!isEditing && (
+              <div className="hidden md:flex items-center gap-1 rounded-md bg-muted p-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleFontSizeChange(-1)}
                 >
-                  <PopoverTrigger asChild>
+                  <ZoomOut className="h-4 w-4" />
+                </Button>
+                <span className="font-mono text-sm font-semibold w-8 text-center">
+                  Aa
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => handleFontSizeChange(1)}
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {isHost && (
+              <div className="flex items-center gap-1">
+                {isEditing ? (
+                  <div className="flex items-center gap-1">
                     <Button
                       variant="outline"
-                      role="combobox"
-                      aria-expanded={songSelectorOpen}
-                      className="w-auto md:w-[300px] font-semibold text-lg justify-between"
-                      disabled={!allSongs || allSongs.length === 0 || isEditing}
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={handleCancelEdit}
                     >
-                      <div className="flex items-center gap-2 overflow-hidden text-left">
-                        {currentSong?.artworkUrl ? (
-                          <Image
-                            src={currentSong.artworkUrl}
-                            alt={currentSong.title}
-                            width={24}
-                            height={24}
-                            className="rounded-sm"
-                          />
-                        ) : (
-                          <Music className="h-5 w-5 flex-shrink-0" />
-                        )}
-                        <span className="truncate">
-                          {currentSong?.title ?? 'Wähle einen Song...'}
-                        </span>
-                      </div>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      <X className="h-4 w-4" />
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                    <div className="p-2 border-b">
-                      <Input
-                        placeholder="Song suchen..."
-                        value={songSearch}
-                        onChange={(e) => setSongSearch(e.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                    <div className="max-h-[300px] overflow-y-auto p-1">
-                      {filteredSongs.length === 0 ? (
-                        <p className="p-2 text-center text-sm text-muted-foreground">
-                          Kein Song gefunden.
-                        </p>
-                      ) : (
-                        filteredSongs.map((songItem) => (
-                          <Button
-                            key={songItem.id}
-                            variant="ghost"
-                            className="w-full justify-start h-auto p-2 text-left"
-                            onClick={() => {
-                              handleSongChange(songItem.id);
-                              setSongSelectorOpen(false);
-                            }}
-                          >
-                            <div className="flex items-center gap-3 w-full">
-                              {songItem.artworkUrl ? (
-                                <Image
-                                  src={songItem.artworkUrl}
-                                  alt={songItem.title}
-                                  width={32}
-                                  height={32}
-                                  className="rounded-sm object-cover"
-                                />
-                              ) : (
-                                <div className="w-8 h-8 flex items-center justify-center bg-muted rounded-sm text-muted-foreground flex-shrink-0">
-                                  <Music className="h-4 w-4" />
-                                </div>
-                              )}
-                              <div className="flex-1 overflow-hidden">
-                                <div className="font-medium truncate">
-                                  {songItem.title}
-                                </div>
-                                <div className="text-sm text-muted-foreground truncate">
-                                  {songItem.artist}
-                                </div>
-                              </div>
-                              {session.songId === songItem.id && (
-                                <Check className="ml-auto h-4 w-4" />
-                              )}
-                            </div>
-                          </Button>
-                        ))
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              ) : (
-                <span className="font-semibold text-lg">
-                  {currentSong?.title || 'SyncScroll'}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center justify-end flex-wrap gap-x-2 sm:gap-x-4 gap-y-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Users className="h-5 w-5" />
-                {participants && participants.length > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">
-                    {participants.length}
-                  </span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64">
-              <div className="font-bold mb-2">
-                Aktive Nutzer ({participants?.length || 0})
-              </div>
-              <ul className="space-y-3 max-h-60 overflow-y-auto">
-                {participantsLoading ? (
-                  <li>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  </li>
+                    <Button
+                      size="icon"
+                      className="h-8 w-8 bg-green-600 hover:bg-green-700"
+                      onClick={handleSaveEdits}
+                    >
+                      <Save className="h-4 w-4" />
+                    </Button>
+                  </div>
                 ) : (
-                  participants?.map((p) => (
-                    <li key={p.id} className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        {p.photoURL && (
-                          <AvatarImage
-                            src={p.photoURL}
-                            alt={p.displayName || ''}
-                          />
-                        )}
-                        <AvatarFallback>
-                          {p.isAnonymous
-                            ? 'A'
-                            : p.displayName
-                            ? p.displayName.charAt(0).toUpperCase()
-                            : 'U'}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm truncate">
-                        {p.isAnonymous
-                          ? `Anonym (${p.id.substring(0, 4)})`
-                          : p.displayName || 'Anonymer Nutzer'}
-                      </span>
-                    </li>
-                  ))
-                )}
-                {!participantsLoading && participants?.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Niemand sonst ist hier.
-                  </p>
-                )}
-              </ul>
-            </PopoverContent>
-          </Popover>
-
-          <div className="flex items-center gap-1.5">
-            <Switch
-              id="show-chords"
-              checked={showChords}
-              onCheckedChange={setShowChords}
-              disabled={isEditing}
-            />
-            <Label htmlFor="show-chords" className="text-sm hidden sm:block">
-              Akkorde
-            </Label>
-          </div>
-
-          {!isEditing && (
-            <div className="flex items-center gap-1 rounded-md bg-muted p-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => handleFontSizeChange(-1)}
-              >
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-              <span className="font-mono text-sm font-semibold w-8 text-center">
-                Aa
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => handleFontSizeChange(1)}
-              >
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-
-          {isHost && (
-            <div className="flex items-center gap-1">
-              {isEditing ? (
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={handleCancelEdit}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    className="h-8 w-8 bg-green-600 hover:bg-green-700"
-                    onClick={handleSaveEdits}
-                  >
-                    <Save className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 rounded-md bg-muted p-1">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Separator orientation="vertical" className="h-5 mx-1" />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handleTranspose(-1)}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="font-mono text-sm font-semibold w-8 text-center">
-                    {(session?.transpose || 0) > 0
-                      ? `+${session?.transpose}`
-                      : session?.transpose || 0}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => handleTranspose(1)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-muted-foreground">
-            {isHost ? (
-              <Crown className="h-5 w-5 text-amber-400" />
-            ) : (
-              <User className="h-5 w-5" />
-            )}
-            <span className="font-mono text-sm font-semibold">
-              {isHost ? 'HOST' : 'ZUSCHAUER'}
-            </span>
-          </div>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                <QrCode className="mr-2 h-4 w-4" />
-                Teilen
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Sitzung teilen</DialogTitle>
-                <DialogDescription>
-                  Andere können den QR-Code scannen oder den Link verwenden, um
-                  sofort beizutreten.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col items-center justify-center pt-4 gap-4">
-                {sessionUrl ? (
-                  <QRCode value={sessionUrl} size={200} />
-                ) : (
-                  <div className="h-[200px] w-[200px] flex items-center justify-center bg-muted rounded-md">
-                    <Loader2 className="h-8 w-8 animate-spin" />
+                  <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setIsEditing(true)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Separator orientation="vertical" className="h-5 mx-1" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => handleTranspose(-1)}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="font-mono text-sm font-semibold w-8 text-center">
+                      {(session?.transpose || 0) > 0
+                        ? `+${session?.transpose}`
+                        : session?.transpose || 0}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => handleTranspose(1)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
                   </div>
                 )}
-                <div className="flex items-center w-full space-x-2">
-                  <Input value={sessionUrl} readOnly className="flex-1" />
-                  <Button
-                    onClick={copyUrlToClipboard}
-                    size="icon"
-                    variant="outline"
-                  >
-                    <span className="sr-only">Link kopieren</span>
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
               </div>
-            </DialogContent>
-          </Dialog>
-          <UserNav />
+            )}
+
+            <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-muted-foreground">
+              {isHost ? (
+                <Crown className="h-5 w-5 text-amber-400" />
+              ) : (
+                <User className="h-5 w-5" />
+              )}
+              <span className="font-mono text-sm font-semibold">
+                {isHost ? 'HOST' : 'ZUSCHAUER'}
+              </span>
+            </div>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <QrCode className="mr-2 h-4 w-4" />
+                  Teilen
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Sitzung teilen</DialogTitle>
+                  <DialogDescription>
+                    Andere können den QR-Code scannen oder den Link verwenden,
+                    um sofort beizutreten.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col items-center justify-center pt-4 gap-4">
+                  {sessionUrl ? (
+                    <QRCode value={sessionUrl} size={200} />
+                  ) : (
+                    <div className="h-[200px] w-[200px] flex items-center justify-center bg-muted rounded-md">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                  )}
+                  <div className="flex items-center w-full space-x-2">
+                    <Input value={sessionUrl} readOnly className="flex-1" />
+                    <Button
+                      onClick={copyUrlToClipboard}
+                      size="icon"
+                      variant="outline"
+                    >
+                      <span className="sr-only">Link kopieren</span>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+            <UserNav />
+          </div>
         </div>
+
+        {/* Middle Row: Song Selector */}
+        <div className="flex w-full items-center gap-2">
+          <Music className="h-6 w-6 text-primary" />
+          <div className="block flex-1 min-w-0">
+            {isHost ? (
+              <Popover
+                open={songSelectorOpen}
+                onOpenChange={setSongSelectorOpen}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={songSelectorOpen}
+                    className="w-full font-semibold text-lg justify-between"
+                    disabled={!allSongs || allSongs.length === 0 || isEditing}
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden text-left">
+                      {currentSong?.artworkUrl ? (
+                        <Image
+                          src={currentSong.artworkUrl}
+                          alt={currentSong.title}
+                          width={24}
+                          height={24}
+                          className="rounded-sm"
+                        />
+                      ) : (
+                        <Music className="h-5 w-5 flex-shrink-0" />
+                      )}
+                      <span className="truncate">
+                        {currentSong?.title ?? 'Wähle einen Song...'}
+                      </span>
+                    </div>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                  <div className="p-2 border-b">
+                    <Input
+                      placeholder="Song suchen..."
+                      value={songSearch}
+                      onChange={(e) => setSongSearch(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto p-1">
+                    {filteredSongs.length === 0 ? (
+                      <p className="p-2 text-center text-sm text-muted-foreground">
+                        Kein Song gefunden.
+                      </p>
+                    ) : (
+                      filteredSongs.map((songItem) => (
+                        <Button
+                          key={songItem.id}
+                          variant="ghost"
+                          className="w-full justify-start h-auto p-2 text-left"
+                          onClick={() => {
+                            handleSongChange(songItem.id);
+                            setSongSelectorOpen(false);
+                          }}
+                        >
+                          <div className="flex items-center gap-3 w-full">
+                            {songItem.artworkUrl ? (
+                              <Image
+                                src={songItem.artworkUrl}
+                                alt={songItem.title}
+                                width={32}
+                                height={32}
+                                className="rounded-sm object-cover"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 flex items-center justify-center bg-muted rounded-sm text-muted-foreground flex-shrink-0">
+                                <Music className="h-4 w-4" />
+                              </div>
+                            )}
+                            <div className="flex-1 overflow-hidden">
+                              <div className="font-medium truncate">
+                                {songItem.title}
+                              </div>
+                              <div className="text-sm text-muted-foreground truncate">
+                                {songItem.artist}
+                              </div>
+                            </div>
+                            {session.songId === songItem.id && (
+                              <Check className="ml-auto h-4 w-4" />
+                            )}
+                          </div>
+                        </Button>
+                      ))
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <span className="font-semibold text-lg truncate">
+                {currentSong?.title || 'SyncScroll'}
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Bottom Row: Mobile-only font size controls */}
+        {!isEditing && (
+            <div className="md:hidden flex items-center gap-1 rounded-md bg-muted p-1 self-center">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleFontSizeChange(-1)}
+                >
+                    <ZoomOut className="h-4 w-4" />
+                </Button>
+                <span className="font-mono text-sm font-semibold w-8 text-center">
+                    Aa
+                </span>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleFontSizeChange(1)}
+                >
+                    <ZoomIn className="h-4 w-4" />
+                </Button>
+            </div>
+        )}
       </header>
       <main className="flex-1 overflow-hidden">
         {currentSong && sessionRef && session && editedSheet && (

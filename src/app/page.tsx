@@ -89,16 +89,6 @@ function SessionCard({
     [firestore, session.songId]
   );
   const { data: song, loading: songLoading } = useDoc<Song>(songRef);
-
-  const participantsRef = useMemoFirebase(
-    () =>
-      firestore
-        ? collection(firestore, `sessions/${session.id}/sessionParticipants`)
-        : null,
-    [firestore, session.id]
-  );
-  const { data: participants, loading: participantsLoading } =
-    useCollection<SessionParticipant>(participantsRef);
     
   const hostProfileRef = useMemoFirebase(
     () => (firestore ? doc(firestore, 'users', session.hostId) : null),
@@ -173,14 +163,6 @@ function SessionCard({
         </div>
       </CardHeader>
       <CardContent className="flex-shrink-0 text-sm pt-0 relative">
-         <div className={`flex items-center gap-2 mb-2 ${hasArtwork ? 'text-white/80' : 'text-muted-foreground'}`}>
-            <Users className="h-4 w-4" />
-            {participantsLoading ? (
-                <div className={`h-4 w-24 rounded animate-pulse ${hasArtwork ? 'bg-white/20' : 'bg-muted'}`} />
-            ) : (
-                <span>{participants?.length || 0} Teilnehmer</span>
-            )}
-        </div>
          <div className={`flex items-center gap-2 ${hasArtwork ? 'text-white/80' : 'text-muted-foreground'}`}>
             <Crown className="h-4 w-4 text-amber-400" />
             {hostProfileLoading ? (
