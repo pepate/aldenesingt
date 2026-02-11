@@ -78,22 +78,18 @@ function AdminPage() {
     error: usersError,
   } = useCollection<UserProfile>(usersRef);
 
-  const authLoading = userLoading || profileLoading;
-
   useEffect(() => {
-    // This effect now only determines the authorization status
-    if (!authLoading) {
-      if (currentUserProfile && currentUserProfile.role === 'admin') {
-        setAuthStatus('authorized');
-      } else {
-        setAuthStatus('unauthorized');
-      }
+    if (userLoading || profileLoading) {
+      setAuthStatus('loading'); // Keep it in loading state while fetching data
+      return;
     }
-  }, [authLoading, currentUserProfile]);
 
-  useEffect(() => {
-    // This effect handles the side-effect of redirection
-    if (authStatus === 'unauthorized') {
+    // Once data is loaded, check for permissions
+    if (user && currentUserProfile && currentUserProfile.role === 'admin') {
+      setAuthStatus('authorized');
+    } else {
+      // If not authorized, redirect
+      setAuthStatus('unauthorized');
       toast({
         variant: 'destructive',
         title: 'Zugriff verweigert',
@@ -101,7 +97,8 @@ function AdminPage() {
       });
       router.push('/');
     }
-  }, [authStatus, router, toast]);
+  }, [user, currentUserProfile, userLoading, profileLoading, router, toast]);
+
 
   useEffect(() => {
     if (fetchedUsers) {
