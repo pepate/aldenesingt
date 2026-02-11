@@ -431,18 +431,20 @@ export default function SongViewer({
       }}
     >
       <div className="max-w-2xl mx-auto">
-        <div className="mb-4">
-          <p>
-            <span className="font-bold">Erscheinungsdatum:</span>{' '}
-            {displaySheet.releaseDate}
-          </p>
-          <p>
-            <span className="font-bold">Genre:</span> {displaySheet.genre}
-          </p>
-          <p>
-            <span className="font-bold">Tonart:</span> {displaySheet.key}
-          </p>
-        </div>
+        {!sessionRef && (
+          <div className="mb-4">
+            <p>
+              <span className="font-bold">Erscheinungsdatum:</span>{' '}
+              {displaySheet.releaseDate}
+            </p>
+            <p>
+              <span className="font-bold">Genre:</span> {displaySheet.genre}
+            </p>
+            <p>
+              <span className="font-bold">Tonart:</span> {displaySheet.key}
+            </p>
+          </div>
+        )}
 
         {displaySheet.song.map((part, partIndex) => (
           <div key={partIndex} className="mb-6">
