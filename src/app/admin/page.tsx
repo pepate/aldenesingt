@@ -75,13 +75,14 @@ function AdminPage() {
     error: usersError,
   } = useCollection<UserProfile>(usersRef);
 
+  const isLoading = userLoading || profileLoading;
+
   useEffect(() => {
-    // Wait until both loading states are false
-    if (userLoading || profileLoading) {
-      return;
+    if (isLoading) {
+      return; // Wait until all data is loaded
     }
 
-    // Now, perform the check
+    // Once loading is complete, perform the authorization check
     if (!currentUserProfile || currentUserProfile.role !== 'admin') {
       toast({
         variant: 'destructive',
@@ -90,7 +91,7 @@ function AdminPage() {
       });
       router.push('/');
     }
-  }, [userLoading, profileLoading, currentUserProfile, router, toast]);
+  }, [isLoading, currentUserProfile, router, toast]);
 
   useEffect(() => {
     if (fetchedUsers) {
@@ -137,11 +138,8 @@ function AdminPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  const isLoading = userLoading || profileLoading;
-  const isAuthorized = !isLoading && currentUserProfile?.role === 'admin';
-
   // Show a loader until authorization is confirmed, preventing content flash
-  if (isLoading || !isAuthorized) {
+  if (isLoading || !currentUserProfile || currentUserProfile.role !== 'admin') {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
