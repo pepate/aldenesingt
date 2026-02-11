@@ -53,7 +53,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -220,6 +220,12 @@ function HomeComponent() {
   const { data: sessions, loading: sessionsLoading } =
     useCollection<Session>(sessionsRef);
 
+  const userSession = useMemo(() => {
+    if (!user || !sessions) return null;
+    return sessions.find(s => s.id === user.uid);
+  }, [sessions, user]);
+
+
   const canCreateContent =
     userProfile &&
     (userProfile.role === 'creator' || userProfile.role === 'admin');
@@ -287,79 +293,85 @@ function HomeComponent() {
                 <Library className="mr-2" />
                 Songs
               </Button>
-              <Dialog
-                open={isSessionDialogOpen}
-                onOpenChange={setIsSessionDialogOpen}
-              >
-                <DialogTrigger asChild>
-                  <Button>
-                    <Share2 className="mr-2 h-4 w-4" /> Session starten
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Neue Session starten</DialogTitle>
-                    <DialogDescription>
-                      Wählen Sie einen Song aus, um eine neue Live-Sitzung zu
-                      starten.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    {songsLoading ? (
-                      <div className="flex justify-center">
-                        <Loader2 className="animate-spin" />
-                      </div>
-                    ) : (
-                      <Select
-                        onValueChange={setSelectedSongId}
-                        value={selectedSongId || ''}
+              {userSession ? (
+                 <Button onClick={() => router.push(`/session/${userSession.id}`)}>
+                    <Share2 className="mr-2 h-4 w-4" /> Session öffnen
+                </Button>
+              ) : (
+                <Dialog
+                  open={isSessionDialogOpen}
+                  onOpenChange={setIsSessionDialogOpen}
+                >
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Share2 className="mr-2 h-4 w-4" /> Session starten
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Neue Session starten</DialogTitle>
+                      <DialogDescription>
+                        Wählen Sie einen Song aus, um eine neue Live-Sitzung zu
+                        starten.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      {songsLoading ? (
+                        <div className="flex justify-center">
+                          <Loader2 className="animate-spin" />
+                        </div>
+                      ) : (
+                        <Select
+                          onValueChange={setSelectedSongId}
+                          value={selectedSongId || ''}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Wählen Sie einen Song..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {songs?.map((song) => (
+                              <SelectItem key={song.id} value={song.id}>
+                                <div className="flex items-center gap-3">
+                                  {song.artworkUrl ? (
+                                    <Image
+                                      src={song.artworkUrl}
+                                      alt={song.title}
+                                      width={24}
+                                      height={24}
+                                      className="rounded-sm object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-6 h-6 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
+                                      <Music className="h-4 w-4" />
+                                    </div>
+                                  )}
+                                  <span>
+                                    {song.title} - {song.artist}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsSessionDialogOpen(false)}
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Wählen Sie einen Song..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {songs?.map((song) => (
-                            <SelectItem key={song.id} value={song.id}>
-                              <div className="flex items-center gap-3">
-                                {song.artworkUrl ? (
-                                  <Image
-                                    src={song.artworkUrl}
-                                    alt={song.title}
-                                    width={24}
-                                    height={24}
-                                    className="rounded-sm object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-6 h-6 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
-                                    <Music className="h-4 w-4" />
-                                  </div>
-                                )}
-                                <span>
-                                  {song.title} - {song.artist}
-                                </span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsSessionDialogOpen(false)}
-                    >
-                      Abbrechen
-                    </Button>
-                    <Button
-                      onClick={handleStartSession}
-                      disabled={!selectedSongId || songsLoading}
-                    >
-                      Session jetzt starten
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                        Abbrechen
+                      </Button>
+                      <Button
+                        onClick={handleStartSession}
+                        disabled={!selectedSongId || songsLoading}
+                      >
+                        Session jetzt starten
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </>
           )}
           {user ? (

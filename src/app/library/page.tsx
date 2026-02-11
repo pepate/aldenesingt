@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
@@ -40,7 +40,7 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import type { Song, SongSheet, UserProfile } from '@/lib/types';
+import type { Song, SongSheet, UserProfile, Session } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -132,6 +132,18 @@ function LibraryPage() {
     loading: songsLoading,
     error,
   } = useCollection<Song>(songsRef);
+
+  const sessionsRef = useMemoFirebase(
+    () => (firestore ? collection(firestore, 'sessions') : null),
+    [firestore]
+  );
+  const { data: sessions, loading: sessionsLoading } =
+    useCollection<Session>(sessionsRef);
+
+  const userSession = useMemo(() => {
+    if (!user || !sessions) return null;
+    return sessions.find((s) => s.id === user.uid);
+  }, [user, sessions]);
 
   // Debounced iTunes Search
   useEffect(() => {
@@ -377,76 +389,83 @@ function LibraryPage() {
         </div>
         <div className="flex items-center gap-4">
           {canGenerate && (
-            <Dialog
-              open={isSessionDialogOpen}
-              onOpenChange={setIsSessionDialogOpen}
-            >
-              <DialogTrigger asChild>
-                <Button>
-                  <Share2 className="mr-2 h-4 w-4" /> Session starten
+            userSession ? (
+                <Button onClick={() => router.push(`/session/${userSession.id}`)}>
+                    <Share2 className="mr-2 h-4 w-4" /> Session öffnen
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Neue Session starten</DialogTitle>
-                  <DialogDescription>
-                    Wählen Sie einen Song aus, um eine neue Live-Sitzung zu
-                    starten.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  {songsLoading ? (
-                    <div className="flex justify-center">
-                      <Loader2 className="animate-spin" />
-                    </div>
-                  ) : (
-                    <Select onValueChange={setSelectedSongId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Wählen Sie einen Song..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {songs?.map((song) => (
-                          <SelectItem key={song.id} value={song.id}>
-                            <div className="flex items-center gap-3">
-                              {song.artworkUrl ? (
-                                <Image
-                                  src={song.artworkUrl}
-                                  alt={song.title}
-                                  width={24}
-                                  height={24}
-                                  className="rounded-sm object-cover"
-                                />
-                              ) : (
-                                <div className="w-6 h-6 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
-                                  <Music className="h-4 w-4" />
+            ) : (
+                <Dialog
+                  open={isSessionDialogOpen}
+                  onOpenChange={setIsSessionDialogOpen}
+                >
+                  <DialogTrigger asChild>
+                    <Button disabled={sessionsLoading}>
+                      {sessionsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Share2 className="mr-2 h-4 w-4" />}
+                      Session starten
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Neue Session starten</DialogTitle>
+                      <DialogDescription>
+                        Wählen Sie einen Song aus, um eine neue Live-Sitzung zu
+                        starten.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      {songsLoading ? (
+                        <div className="flex justify-center">
+                          <Loader2 className="animate-spin" />
+                        </div>
+                      ) : (
+                        <Select onValueChange={setSelectedSongId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Wählen Sie einen Song..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {songs?.map((song) => (
+                              <SelectItem key={song.id} value={song.id}>
+                                <div className="flex items-center gap-3">
+                                  {song.artworkUrl ? (
+                                    <Image
+                                      src={song.artworkUrl}
+                                      alt={song.title}
+                                      width={24}
+                                      height={24}
+                                      className="rounded-sm object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-6 h-6 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
+                                      <Music className="h-4 w-4" />
+                                    </div>
+                                  )}
+                                  <span>
+                                    {song.title} - {song.artist}
+                                  </span>
                                 </div>
-                              )}
-                              <span>
-                                {song.title} - {song.artist}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsSessionDialogOpen(false)}
-                  >
-                    Abbrechen
-                  </Button>
-                  <Button
-                    onClick={handleStartSession}
-                    disabled={!selectedSongId || songsLoading}
-                  >
-                    Session jetzt starten
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsSessionDialogOpen(false)}
+                      >
+                        Abbrechen
+                      </Button>
+                      <Button
+                        onClick={handleStartSession}
+                        disabled={!selectedSongId || songsLoading}
+                      >
+                        Session jetzt starten
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+            )
           )}
           <UserNav />
         </div>
