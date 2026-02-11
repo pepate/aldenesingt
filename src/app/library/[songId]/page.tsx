@@ -55,6 +55,7 @@ function SongPageContent() {
     ? params.songId[0]
     : params.songId;
 
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedSheet, setEditedSheet] = useState<SongSheet | null>(null);
   const [transpose, setTranspose] = useState(0);
@@ -94,9 +95,9 @@ function SongPageContent() {
       router.push('/library');
     }
   }, [songError, router, toast]);
-
+  
   useEffect(() => {
-    if (!songLoading && !song) {
+    if (initialCheckComplete && !song) {
       toast({
         variant: 'destructive',
         title: 'Song nicht gefunden',
@@ -104,7 +105,17 @@ function SongPageContent() {
       });
       router.push('/library');
     }
-  }, [songLoading, song, router, toast]);
+  }, [initialCheckComplete, song, router, toast]);
+  
+  // Timer to manage the grace period for song loading
+  useEffect(() => {
+    if (!songLoading) {
+      const timer = setTimeout(() => {
+        setInitialCheckComplete(true);
+      }, 1500); // 1.5s grace period
+      return () => clearTimeout(timer);
+    }
+  }, [songLoading]);
 
   // When song data loads, initialize the editedSheet state
   useEffect(() => {
@@ -173,7 +184,7 @@ function SongPageContent() {
     localStorage.setItem('song-viewer-font-size-index', String(newIndex));
   };
 
-  if (songLoading || !song || !editedSheet) {
+  if ((songLoading || !initialCheckComplete) || !song || !editedSheet) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

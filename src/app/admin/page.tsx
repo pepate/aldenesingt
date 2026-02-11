@@ -57,9 +57,6 @@ function AdminPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
-  const [authStatus, setAuthStatus] = useState<
-    'loading' | 'authorized' | 'unauthorized'
-  >('loading');
 
   const currentUserProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -79,17 +76,13 @@ function AdminPage() {
   } = useCollection<UserProfile>(usersRef);
 
   useEffect(() => {
+    // Wait until both loading states are false
     if (userLoading || profileLoading) {
-      setAuthStatus('loading'); // Keep it in loading state while fetching data
       return;
     }
 
-    // Once data is loaded, check for permissions
-    if (user && currentUserProfile && currentUserProfile.role === 'admin') {
-      setAuthStatus('authorized');
-    } else {
-      // If not authorized, redirect
-      setAuthStatus('unauthorized');
+    // Now, perform the check
+    if (!currentUserProfile || currentUserProfile.role !== 'admin') {
       toast({
         variant: 'destructive',
         title: 'Zugriff verweigert',
@@ -97,8 +90,7 @@ function AdminPage() {
       });
       router.push('/');
     }
-  }, [user, currentUserProfile, userLoading, profileLoading, router, toast]);
-
+  }, [userLoading, profileLoading, currentUserProfile, router, toast]);
 
   useEffect(() => {
     if (fetchedUsers) {
@@ -145,9 +137,11 @@ function AdminPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  // This shows a loader until we are certain the user is authorized.
-  // This prevents the page content from flashing before redirection.
-  if (authStatus !== 'authorized') {
+  const isLoading = userLoading || profileLoading;
+  const isAuthorized = !isLoading && currentUserProfile?.role === 'admin';
+
+  // Show a loader until authorization is confirmed, preventing content flash
+  if (isLoading || !isAuthorized) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
