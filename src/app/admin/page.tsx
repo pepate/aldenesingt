@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, Loader2, Users, UserCheck, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,6 +52,8 @@ function AdminPage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  const [gracePeriod, setGracePeriod] = useState(true);
+
   const currentUserProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
     [firestore, user]
@@ -69,11 +71,18 @@ function AdminPage() {
     error: usersError,
   } = useCollection<UserProfile>(usersRef);
 
-  const isLoading = userLoading || profileLoading;
+  // Enforce a minimum loading time of 1 second as requested
+  useEffect(() => {
+    const timer = setTimeout(() => setGracePeriod(false), 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const isLoading = userLoading || profileLoading || gracePeriod;
   
   console.log('[State Log]', {
     'userLoading': userLoading,
     'profileLoading': profileLoading,
+    'gracePeriod': gracePeriod,
     'isLoading': isLoading,
     'user': user ? user.uid : null,
     'currentUserProfile': currentUserProfile,
@@ -143,7 +152,7 @@ function AdminPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  // 1. Show a loader as long as ANY data is loading.
+  // 1. Show a loader as long as ANY data is loading or grace period is active.
   if (isLoading) {
     console.log('[Render Log] Showing loader because isLoading is true.');
     return (
