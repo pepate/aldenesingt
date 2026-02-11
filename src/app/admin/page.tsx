@@ -57,6 +57,8 @@ function AdminPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
+  const [authStatus, setAuthStatus] =
+    useState<'loading' | 'authorized' | 'unauthorized'>('loading');
 
   const currentUserProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -75,27 +77,31 @@ function AdminPage() {
     error: usersError,
   } = useCollection<UserProfile>(usersRef);
 
-  const isLoading = userLoading || profileLoading;
-
   useEffect(() => {
-    if (isLoading) {
-      return; // Wait until all data is loaded
+    // We wait until both user and profile loading are complete.
+    if (userLoading || profileLoading) {
+      setAuthStatus('loading');
+      return;
     }
 
-    // Once loading is complete, perform the authorization check
-    if (!currentUserProfile || currentUserProfile.role !== 'admin') {
+    // Once loading is finished, we determine the status.
+    if (currentUserProfile && currentUserProfile.role === 'admin') {
+      setAuthStatus('authorized');
+    } else {
+      setAuthStatus('unauthorized');
+    }
+  }, [userLoading, profileLoading, currentUserProfile]);
+
+  useEffect(() => {
+    if (authStatus === 'unauthorized') {
       toast({
         variant: 'destructive',
         title: 'Zugriff verweigert',
         description: 'Sie haben keine Berechtigung für diese Seite.',
       });
       router.push('/');
-    }
-  }, [isLoading, currentUserProfile, router, toast]);
-
-  useEffect(() => {
-    if (fetchedUsers) {
-      // Sort by creation date descending
+    } else if (authStatus === 'authorized' && fetchedUsers) {
+      // Sort users only when authorized and data is available
       const sorted = [...fetchedUsers].sort((a, b) => {
         const dateA = a.createdAt?.toDate() || 0;
         const dateB = b.createdAt?.toDate() || 0;
@@ -105,7 +111,7 @@ function AdminPage() {
       });
       setUserProfiles(sorted);
     }
-  }, [fetchedUsers]);
+  }, [authStatus, fetchedUsers, router, toast]);
 
   const handleRoleChange = async (
     userId: string,
@@ -138,8 +144,8 @@ function AdminPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  // Show a loader until authorization is confirmed, preventing content flash
-  if (isLoading || !currentUserProfile || currentUserProfile.role !== 'admin') {
+  // Show a loader until authorization is definitively confirmed.
+  if (authStatus !== 'authorized') {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
