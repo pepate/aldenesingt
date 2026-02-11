@@ -6,8 +6,9 @@ import {
   signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  updateProfile,
 } from 'firebase/auth';
-import { useUser, useAuth } from '@/firebase';
+import { useUser, useAuth, useFirebase } from '@/firebase';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,15 +28,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, User as UserIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 function AuthPage() {
   const { user, loading } = useUser();
   const router = useRouter();
   const auth = useAuth();
+  const { firestore } = useFirebase();
   const { toast } = useToast();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
 
   useEffect(() => {
     if (!loading && user) {
@@ -67,9 +71,34 @@ function AuthPage() {
 
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth) return;
+    if (!auth || !firestore) return;
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      const user = userCredential.user;
+
+      // Update the profile with the display name
+      await updateProfile(user, { displayName });
+
+      // Create the user document in Firestore to ensure displayName is set
+      const userRef = doc(firestore, 'users', user.uid);
+      await setDoc(
+        userRef,
+        {
+          id: user.uid,
+          email: user.email,
+          displayName: displayName, // Use the name from the form
+          photoURL: user.photoURL,
+          createdAt: serverTimestamp(),
+          role: 'user',
+          songsGeneratedToday: 0,
+          lastGenerationDate: '',
+        },
+        { merge: true }
+      );
     } catch (error: any) {
       console.error('Error during email sign-up:', error);
       toast({
@@ -94,7 +123,6 @@ function AuthPage() {
       });
     }
   };
-
 
   if (loading || !auth) {
     return (
@@ -123,13 +151,28 @@ function AuthPage() {
               <form onSubmit={handleEmailSignIn} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="login-email">E-Mail</Label>
-                  <Input id="login-email" type="email" placeholder="m@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="m@example.com"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="login-password">Passwort</Label>
-                  <Input id="login-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                  <Input
+                    id="login-password"
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
                 </div>
-                <Button type="submit" className="w-full">Mit E-Mail anmelden</Button>
+                <Button type="submit" className="w-full">
+                  Mit E-Mail anmelden
+                </Button>
               </form>
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -141,31 +184,59 @@ function AuthPage() {
                   </span>
                 </div>
               </div>
-              <Button className="w-full" variant="outline" onClick={handleGoogleSignIn}>
+              <Button
+                className="w-full"
+                variant="outline"
+                onClick={handleGoogleSignIn}
+              >
                 <UserIcon className="mr-2" /> Mit Google anmelden
               </Button>
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="signup">
-           <Card>
+          <Card>
             <CardHeader>
               <CardTitle>Registrieren</CardTitle>
-              <CardDescription>
-                Erstellen Sie ein Konto, um loszulegen.
-              </CardDescription>
+              <CardDescription>Erstellen Sie ein Konto, um loszulegen.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-               <form onSubmit={handleEmailSignUp} className="space-y-4">
+              <form onSubmit={handleEmailSignUp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="signup-name">Benutzername</Label>
+                  <Input
+                    id="signup-name"
+                    type="text"
+                    placeholder="Ihr Name"
+                    required
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">E-Mail</Label>
-                  <Input id="signup-email" type="email" placeholder="m@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    placeholder="m@example.com"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Passwort</Label>
-                  <Input id="signup-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
                 </div>
-                <Button type="submit" className="w-full">Konto erstellen</Button>
+                <Button type="submit" className="w-full">
+                  Konto erstellen
+                </Button>
               </form>
             </CardContent>
           </Card>
@@ -180,5 +251,5 @@ export default function Auth() {
     <FirebaseClientProvider>
       <AuthPage />
     </FirebaseClientProvider>
-  )
+  );
 }
