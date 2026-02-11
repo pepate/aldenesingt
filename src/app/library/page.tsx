@@ -4,13 +4,12 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   Music,
-  Trash2,
   LogIn,
   Loader2,
   Share2,
   Library as LibraryIcon,
   Sparkles,
-  Pencil,
+  User,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,23 +34,11 @@ import {
   collection,
   addDoc,
   serverTimestamp,
-  deleteDoc,
   doc,
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
 import type { Song, SongSheet, UserProfile, Session } from '@/lib/types';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -70,24 +57,81 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
-
 import { UserNav } from '@/components/user-nav';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { generateSongSheet } from '@/ai/flows/generate-song-sheet-flow';
 
-const MAJOR_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const MINOR_KEYS = ['Am', 'A#m', 'Bm', 'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m'];
+const MAJOR_KEYS = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+];
+const MINOR_KEYS = [
+  'Am',
+  'A#m',
+  'Bm',
+  'Cm',
+  'C#m',
+  'Dm',
+  'D#m',
+  'Em',
+  'Fm',
+  'F#m',
+  'Gm',
+  'G#m',
+];
+
+function SongCard({ song }: { song: Song }) {
+  const router = useRouter();
+  const hasArtwork = !!song.artworkUrl;
+
+  return (
+    <Card
+      onClick={() => router.push(`/library/${song.id}`)}
+      className="flex flex-col group relative overflow-hidden cursor-pointer"
+    >
+      {hasArtwork && (
+        <div className="absolute top-0 right-0 h-full w-1/2 opacity-40 group-hover:opacity-60 transition-opacity duration-300">
+          <Image
+            src={song.artworkUrl!}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="50vw"
+          />
+          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-background/50 to-background" />
+        </div>
+      )}
+      <CardHeader className="relative flex-grow">
+        <div>
+          <CardTitle className="truncate leading-tight text-lg">
+            {song.title || 'Unbekannter Song'}
+          </CardTitle>
+          <CardDescription className="mt-1">
+            {song.artist || ' '}
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-shrink-0 text-sm pt-0 relative">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <User className="h-4 w-4" />
+          <span className="truncate">{song.creatorName || 'Unbekannt'}</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function LibraryPage() {
   const { user, loading: userLoading } = useUser();
@@ -95,10 +139,13 @@ function LibraryPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  // Search state for iTunes
+  const [itunesSearchQuery, setItunesSearchQuery] = useState('');
+  const [itunesSearchResults, setItunesSearchResults] = useState<any[]>([]);
+  const [isSearchingItunes, setIsSearchingItunes] = useState(false);
+
+  // Search state for local library
+  const [librarySearchQuery, setLibrarySearchQuery] = useState('');
 
   // Generation flow state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -111,7 +158,7 @@ function LibraryPage() {
   } | null>(null);
   const [lyrics, setLyrics] = useState('');
   const [selectedKey, setSelectedKey] = useState('C');
-  
+
   // Session dialog state
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false);
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
@@ -133,6 +180,17 @@ function LibraryPage() {
     error,
   } = useCollection<Song>(songsRef);
 
+  const filteredSongs = useMemo(() => {
+    if (!songs) return [];
+    if (!librarySearchQuery) return songs;
+    const query = librarySearchQuery.toLowerCase();
+    return songs.filter(
+      (song) =>
+        song.title.toLowerCase().includes(query) ||
+        song.artist.toLowerCase().includes(query)
+    );
+  }, [songs, librarySearchQuery]);
+
   const sessionsRef = useMemoFirebase(
     () => (firestore ? collection(firestore, 'sessions') : null),
     [firestore]
@@ -147,21 +205,21 @@ function LibraryPage() {
 
   // Debounced iTunes Search
   useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setSearchResults([]);
+    if (itunesSearchQuery.trim() === '') {
+      setItunesSearchResults([]);
       return;
     }
 
-    setIsSearching(true);
+    setIsSearchingItunes(true);
     const debounceTimer = setTimeout(async () => {
       try {
-        const searchTerm = encodeURIComponent(searchQuery);
+        const searchTerm = encodeURIComponent(itunesSearchQuery);
         const response = await fetch(
           `https://itunes.apple.com/search?term=${searchTerm}&entity=song&limit=10`
         );
         if (!response.ok) throw new Error('iTunes API request failed');
         const data = await response.json();
-        setSearchResults(data.results || []);
+        setItunesSearchResults(data.results || []);
       } catch (error) {
         console.error('iTunes search failed:', error);
         toast({
@@ -169,14 +227,14 @@ function LibraryPage() {
           title: 'Suche fehlgeschlagen',
           description: 'Die Suche nach Songs ist fehlgeschlagen.',
         });
-        setSearchResults([]);
+        setItunesSearchResults([]);
       } finally {
-        setIsSearching(false);
+        setIsSearchingItunes(false);
       }
     }, 500); // 500ms debounce
 
     return () => clearTimeout(debounceTimer);
-  }, [searchQuery, toast]);
+  }, [itunesSearchQuery, toast]);
 
   const handleSelectSong = (song: any) => {
     setGenerationInfo({
@@ -187,8 +245,8 @@ function LibraryPage() {
     setLyrics(''); // Clear previous lyrics
     setGenerationDialogOpen(true);
     setIsFetchingLyrics(true);
-    setSearchQuery('');
-    setSearchResults([]);
+    setItunesSearchQuery('');
+    setItunesSearchResults([]);
 
     const fetchLyrics = async () => {
       try {
@@ -218,7 +276,6 @@ function LibraryPage() {
     fetchLyrics();
   };
 
-
   const handleGenerateSheet = async () => {
     if (!user || !firestore || !generationInfo || !lyrics || !selectedKey) {
       toast({
@@ -228,7 +285,7 @@ function LibraryPage() {
       });
       return;
     }
-    
+
     if (!userProfileRef) return;
 
     setIsGenerating(true);
@@ -284,32 +341,7 @@ function LibraryPage() {
       setGenerationInfo(null);
     }
   };
-
-  const handleDelete = async (songToDelete: Song) => {
-    if (
-      !firestore ||
-      !user ||
-      (user.uid !== songToDelete.userId && userProfile?.role !== 'admin')
-    )
-      return;
-    try {
-      const docRef = doc(firestore, 'songs', songToDelete.id);
-      await deleteDoc(docRef);
-
-      toast({
-        title: 'Song gelöscht',
-        description: `"${songToDelete.title}" wurde entfernt.`,
-      });
-    } catch (error: any) {
-      console.error('Delete Error:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Löschen fehlgeschlagen',
-        description: 'Der Song konnte nicht gelöscht werden.',
-      });
-    }
-  };
-
+  
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
 
@@ -388,85 +420,90 @@ function LibraryPage() {
           <h1 className="text-3xl font-bold text-foreground">Songs</h1>
         </div>
         <div className="flex items-center gap-4">
-          {canGenerate && (
-            userSession ? (
-                <Button onClick={() => router.push(`/session/${userSession.id}`)}>
-                    <Share2 className="mr-2 h-4 w-4" /> Session öffnen
-                </Button>
+          {canGenerate &&
+            (userSession ? (
+              <Button
+                onClick={() => router.push(`/session/${userSession.id}`)}
+              >
+                <Share2 className="mr-2 h-4 w-4" /> Session öffnen
+              </Button>
             ) : (
-                <Dialog
-                  open={isSessionDialogOpen}
-                  onOpenChange={setIsSessionDialogOpen}
-                >
-                  <DialogTrigger asChild>
-                    <Button disabled={sessionsLoading}>
-                      {sessionsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Share2 className="mr-2 h-4 w-4" />}
-                      Session starten
+              <Dialog
+                open={isSessionDialogOpen}
+                onOpenChange={setIsSessionDialogOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button disabled={sessionsLoading}>
+                    {sessionsLoading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Share2 className="mr-2 h-4 w-4" />
+                    )}
+                    Session starten
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Neue Session starten</DialogTitle>
+                    <DialogDescription>
+                      Wählen Sie einen Song aus, um eine neue Live-Sitzung zu
+                      starten.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    {songsLoading ? (
+                      <div className="flex justify-center">
+                        <Loader2 className="animate-spin" />
+                      </div>
+                    ) : (
+                      <Select onValueChange={setSelectedSongId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Wählen Sie einen Song..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {songs?.map((song) => (
+                            <SelectItem key={song.id} value={song.id}>
+                              <div className="flex items-center gap-3">
+                                {song.artworkUrl ? (
+                                  <Image
+                                    src={song.artworkUrl}
+                                    alt={song.title}
+                                    width={24}
+                                    height={24}
+                                    className="rounded-sm object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-6 h-6 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
+                                    <Music className="h-4 w-4" />
+                                  </div>
+                                )}
+                                <span>
+                                  {song.title} - {song.artist}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsSessionDialogOpen(false)}
+                    >
+                      Abbrechen
                     </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Neue Session starten</DialogTitle>
-                      <DialogDescription>
-                        Wählen Sie einen Song aus, um eine neue Live-Sitzung zu
-                        starten.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      {songsLoading ? (
-                        <div className="flex justify-center">
-                          <Loader2 className="animate-spin" />
-                        </div>
-                      ) : (
-                        <Select onValueChange={setSelectedSongId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Wählen Sie einen Song..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {songs?.map((song) => (
-                              <SelectItem key={song.id} value={song.id}>
-                                <div className="flex items-center gap-3">
-                                  {song.artworkUrl ? (
-                                    <Image
-                                      src={song.artworkUrl}
-                                      alt={song.title}
-                                      width={24}
-                                      height={24}
-                                      className="rounded-sm object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-6 h-6 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
-                                      <Music className="h-4 w-4" />
-                                    </div>
-                                  )}
-                                  <span>
-                                    {song.title} - {song.artist}
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsSessionDialogOpen(false)}
-                      >
-                        Abbrechen
-                      </Button>
-                      <Button
-                        onClick={handleStartSession}
-                        disabled={!selectedSongId || songsLoading}
-                      >
-                        Session jetzt starten
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-            )
-          )}
+                    <Button
+                      onClick={handleStartSession}
+                      disabled={!selectedSongId || songsLoading}
+                    >
+                      Session jetzt starten
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            ))}
           <UserNav />
         </div>
       </header>
@@ -480,8 +517,8 @@ function LibraryPage() {
                 Neuen Song mit KI generieren
               </CardTitle>
               <CardDescription>
-                Suche nach einem Song, um Texte zu finden und Akkorde mit
-                KI zu generieren.
+                Suche nach einem Song, um Texte zu finden und Akkorde mit KI zu
+                generieren.
                 {userProfile?.role === 'creator' &&
                   ` (${
                     5 -
@@ -499,22 +536,22 @@ function LibraryPage() {
                   <Input
                     id="song-search"
                     placeholder="z.B. Hotel California, Eagles"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={itunesSearchQuery}
+                    onChange={(e) => setItunesSearchQuery(e.target.value)}
                     disabled={isGenerating}
                   />
                 </div>
 
-                {isSearching && (
+                {isSearchingItunes && (
                   <div className="flex items-center justify-center p-4">
                     <Loader2 className="h-6 w-6 animate-spin" />
                   </div>
                 )}
 
-                {!isSearching && searchResults.length > 0 && (
+                {!isSearchingItunes && itunesSearchResults.length > 0 && (
                   <div className="border rounded-md max-h-72 overflow-y-auto">
                     <ul className="divide-y">
-                      {searchResults.map((song) => (
+                      {itunesSearchResults.map((song) => (
                         <li key={song.trackId}>
                           <button
                             className="w-full text-left p-3 hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
@@ -542,9 +579,9 @@ function LibraryPage() {
                     </ul>
                   </div>
                 )}
-                {!isSearching &&
-                  searchQuery &&
-                  searchResults.length === 0 && (
+                {!isSearchingItunes &&
+                  itunesSearchQuery &&
+                  itunesSearchResults.length === 0 && (
                     <p className="text-sm text-muted-foreground text-center p-4">
                       Keine Ergebnisse gefunden.
                     </p>
@@ -553,7 +590,7 @@ function LibraryPage() {
             </CardContent>
           </Card>
         )}
-        
+
         {/* Generation Dialog */}
         <Dialog
           open={generationDialogOpen}
@@ -563,7 +600,8 @@ function LibraryPage() {
             <DialogHeader>
               <DialogTitle>Song-Blatt generieren</DialogTitle>
               <DialogDescription>
-                Wählen Sie eine Tonart und bestätigen Sie den Text, um die Akkorde zu generieren.
+                Wählen Sie eine Tonart und bestätigen Sie den Text, um die
+                Akkorde zu generieren.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -578,14 +616,18 @@ function LibraryPage() {
                   <SelectContent>
                     <SelectGroup>
                       <SelectLabel>Dur</SelectLabel>
-                      {MAJOR_KEYS.map(key => (
-                        <SelectItem key={key} value={key}>{key}</SelectItem>
+                      {MAJOR_KEYS.map((key) => (
+                        <SelectItem key={key} value={key}>
+                          {key}
+                        </SelectItem>
                       ))}
                     </SelectGroup>
                     <SelectGroup>
                       <SelectLabel>Moll</SelectLabel>
-                      {MINOR_KEYS.map(key => (
-                        <SelectItem key={key} value={key}>{key}</SelectItem>
+                      {MINOR_KEYS.map((key) => (
+                        <SelectItem key={key} value={key}>
+                          {key}
+                        </SelectItem>
                       ))}
                     </SelectGroup>
                   </SelectContent>
@@ -618,52 +660,43 @@ function LibraryPage() {
               >
                 Abbrechen
               </Button>
-              <Button onClick={handleGenerateSheet} disabled={isGenerating || isFetchingLyrics || !lyrics}>
-                {isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button
+                onClick={handleGenerateSheet}
+                disabled={isGenerating || isFetchingLyrics || !lyrics}
+              >
+                {isGenerating && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
                 Generieren
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-
         <div>
-          <h2 className="text-2xl font-bold mb-4">Alle Songs</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Alle Songs</h2>
+            <div className="w-full max-w-sm">
+              <Input
+                placeholder="Bibliothek durchsuchen..."
+                value={librarySearchQuery}
+                onChange={(e) => setLibrarySearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
           {songsLoading && (
-            <div className="border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px] p-2"></TableHead>
-                    <TableHead>Song</TableHead>
-                    <TableHead>Creator</TableHead>
-                    <TableHead>Erstellt am</TableHead>
-                    <TableHead className="text-right">Aktionen</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[...Array(5)].map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="p-2">
-                        <Skeleton className="h-10 w-10 rounded-sm" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-5 w-3/4" />
-                        <Skeleton className="h-4 w-1/2 mt-1" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-5 w-2/3" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-5 w-3/4" />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Skeleton className="h-9 w-9 inline-block" />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[...Array(8)].map((_, i) => (
+                <Card key={i}>
+                  <CardHeader>
+                    <Skeleton className="h-5 w-3/4 mb-2" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-4 w-1/3" />
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
           {error && (
@@ -671,106 +704,24 @@ function LibraryPage() {
               Fehler beim Laden der Songs: {error.message}
             </p>
           )}
-          {!songsLoading && songs && songs.length === 0 && (
+          {!songsLoading && filteredSongs.length === 0 && (
             <div className="text-center py-16 border-2 border-dashed rounded-lg">
               <Music className="mx-auto h-12 w-12 text-muted-foreground" />
               <h3 className="mt-4 text-lg font-medium">
                 Keine Songs gefunden
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Generieren Sie Ihren ersten Song, um zu beginnen.
+                {librarySearchQuery
+                  ? 'Ihre Suche ergab keine Treffer.'
+                  : 'Generieren Sie Ihren ersten Song, um zu beginnen.'}
               </p>
             </div>
           )}
-          {!songsLoading && songs && songs.length > 0 && (
-            <div className="border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px] p-2"></TableHead>
-                    <TableHead className="w-[40%]">Song</TableHead>
-                    <TableHead className="w-[25%]">Creator</TableHead>
-                    <TableHead className="w-[20%]">Erstellt am</TableHead>
-                    <TableHead className="text-right">Aktionen</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {songs?.map((songItem) => (
-                    <TableRow key={songItem.id}>
-                      <TableCell className="p-2">
-                        {songItem.artworkUrl ? (
-                          <Image
-                            src={songItem.artworkUrl}
-                            alt={songItem.title}
-                            width={40}
-                            height={40}
-                            className="rounded-sm object-cover"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
-                            <Music className="h-5 w-5" />
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{songItem.title}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {songItem.artist}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {songItem.creatorName || 'Unbekannt'}
-                      </TableCell>
-                      <TableCell>
-                        {songItem.createdAt?.toDate
-                          ? format(songItem.createdAt.toDate(), 'dd.MM.yyyy')
-                          : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Bearbeiten"
-                          onClick={() => router.push(`/library/${songItem.id}`)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        {(user?.uid === songItem.userId ||
-                          userProfile?.role === 'admin') && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Löschen</span>
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Sind Sie sicher?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Diese Aktion kann nicht rückgängig gemacht
-                                  werden. Dadurch wird das Song-Sheet dauerhaft
-                                  gelöscht.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(songItem)}
-                                >
-                                  Löschen
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+          {!songsLoading && filteredSongs.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredSongs.map((song) => (
+                <SongCard key={song.id} song={song} />
+              ))}
             </div>
           )}
         </div>

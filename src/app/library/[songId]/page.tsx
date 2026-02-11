@@ -14,6 +14,7 @@ import {
   Minus,
   ZoomIn,
   ZoomOut,
+  Trash2,
 } from 'lucide-react';
 import { cloneDeep } from 'lodash';
 
@@ -21,13 +22,25 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import SongViewer from '@/components/song-viewer';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { useDoc, useFirebase, useMemoFirebase } from '@/firebase';
-import type { Song, SongSheet } from '@/lib/types';
-import { doc, updateDoc } from 'firebase/firestore';
+import { useDoc, useFirebase, useMemoFirebase, useUser } from '@/firebase';
+import type { Song, SongSheet, UserProfile } from '@/lib/types';
+import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { UserNav } from '@/components/user-nav';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+
 
 const FONT_SIZES = ['text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl'];
 
@@ -36,6 +49,7 @@ function SongPageContent() {
   const router = useRouter();
   const { toast } = useToast();
   const { firestore } = useFirebase();
+  const { user } = useUser();
 
   const songId = Array.isArray(params.songId)
     ? params.songId[0]
@@ -46,6 +60,12 @@ function SongPageContent() {
   const [transpose, setTranspose] = useState(0);
   const [showChords, setShowChords] = useState(true);
   const [fontSizeIndex, setFontSizeIndex] = useState(2); // default to 'text-lg'
+
+  const userProfileRef = useMemoFirebase(
+    () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
+    [firestore, user]
+  );
+  const { data: userProfile } = useDoc<UserProfile>(userProfileRef);
 
   useEffect(() => {
     const savedSizeIndex = localStorage.getItem('song-viewer-font-size-index');
@@ -119,6 +139,26 @@ function SongPageContent() {
     }
     setIsEditing(false);
   };
+  
+  const handleDelete = async () => {
+    if (!songRef || !song) return;
+    try {
+      await deleteDoc(songRef);
+      toast({
+        title: 'Song gelöscht',
+        description: `"${song.title}" wurde entfernt.`,
+      });
+      router.push('/library');
+    } catch (error: any) {
+      console.error('Delete Error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Löschen fehlgeschlagen',
+        description: 'Der Song konnte nicht gelöscht werden.',
+      });
+    }
+  };
+
 
   const handleTranspose = (amount: number) => {
     setTranspose((prev) => prev + amount);
@@ -141,6 +181,8 @@ function SongPageContent() {
       </div>
     );
   }
+
+  const canDelete = user?.uid === song.userId || userProfile?.role === 'admin';
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -248,6 +290,30 @@ function SongPageContent() {
                   </Button>
                 </div>
               </>
+            )}
+             {canDelete && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="icon" className="h-8 w-8">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sind Sie sicher?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Diese Aktion kann nicht rückgängig gemacht werden. Dadurch
+                      wird das Song-Sheet dauerhaft gelöscht.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete}>
+                      Löschen
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
           <UserNav />
