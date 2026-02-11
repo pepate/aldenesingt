@@ -443,9 +443,11 @@ function SessionPageContent() {
                 </DialogHeader>
                 <div className="flex flex-col items-center justify-center pt-4 gap-4">
                   {sessionUrl ? (
-                    <QRCode value={sessionUrl} size={200} />
+                    <div className="p-4 bg-white rounded-lg">
+                      <QRCode value={sessionUrl} size={200} />
+                    </div>
                   ) : (
-                    <div className="h-[200px] w-[200px] flex items-center justify-center bg-muted rounded-md">
+                    <div className="h-[232px] w-[232px] flex items-center justify-center bg-muted rounded-md">
                       <Loader2 className="h-8 w-8 animate-spin" />
                     </div>
                   )}
