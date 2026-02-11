@@ -103,11 +103,15 @@ service cloud.firestore {
      */
     match /sessions/{sessionId} {
       allow get, list: if true;
-      // A user can only create a session document where the ID matches their own user ID.
+      // Any signed-in user can create a session, but the session ID must match their own UID.
       allow create: if isSignedIn()
                     && request.resource.data.hostId == request.auth.uid
                     && sessionId == request.auth.uid;
-      allow update: if isSignedIn() && isHost(sessionId);
+
+      // Allow the host, an admin, or a creator to update the session.
+      allow update: if isSignedIn() && (isHost(sessionId) || isAdmin() || isCreator());
+
+      // Allow the host or an admin to delete the session.
       allow delete: if isSignedIn() && (isHost(sessionId) || isAdmin());
     }
   }

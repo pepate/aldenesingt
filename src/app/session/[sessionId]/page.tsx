@@ -54,7 +54,7 @@ import {
   errorEmitter,
   FirestorePermissionError,
 } from '@/firebase';
-import type { Session, Song, SongSheet } from '@/lib/types';
+import type { Session, Song, SongSheet, UserProfile } from '@/lib/types';
 import {
   doc,
   updateDoc,
@@ -100,6 +100,12 @@ function SessionPageContent() {
     // Ensure this runs only on the client and uses the custom domain
     setSessionUrl(`https://qkqk.de/session/${sessionId}`);
   }, [sessionId]);
+  
+  const userProfileRef = useMemoFirebase(
+    () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
+    [firestore, user]
+  );
+  const { data: userProfile, loading: userProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
   const sessionRef = useMemoFirebase(
     () => (firestore ? doc(firestore, 'sessions', sessionId) : null),
@@ -112,6 +118,8 @@ function SessionPageContent() {
   } = useDoc<Session>(sessionRef);
 
   const isHost = session?.hostId === user?.uid;
+  const canChangeSong = isHost || userProfile?.role === 'admin' || userProfile?.role === 'creator';
+
 
   // Global songs for the host's dropdown
   const allSongsRef = useMemoFirebase(
@@ -186,7 +194,7 @@ function SessionPageContent() {
   }, [currentSong]);
 
   const handleSongChange = async (newSongId: string) => {
-    if (!sessionRef || !isHost) return;
+    if (!sessionRef || !canChangeSong) return;
 
     try {
       // Reset transpose when song changes
@@ -286,6 +294,7 @@ function SessionPageContent() {
 
   const showLoading =
     sessionLoading ||
+    userProfileLoading ||
     songsLoading ||
     currentSongLoading ||
     !initialCheckComplete;
@@ -473,7 +482,7 @@ function SessionPageContent() {
         <div className="flex w-full items-center gap-2">
           <Music className="h-6 w-6 text-primary" />
           <div className="block flex-1 min-w-0">
-            {isHost ? (
+            {canChangeSong ? (
               <Popover
                 open={songSelectorOpen}
                 onOpenChange={setSongSelectorOpen}
