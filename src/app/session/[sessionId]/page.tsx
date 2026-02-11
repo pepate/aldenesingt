@@ -80,7 +80,7 @@ function SessionPageContent() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editedSheet, setEditedSheet] = useState<SongSheet | null>(null);
-  const [showChords, setShowChords] = useState(true);
+  const [showChords, setShowChords] = useState(false); // Default to false for guests
   const [songSelectorOpen, setSongSelectorOpen] = useState(false);
   const [songSearch, setSongSearch] = useState('');
   const [fontSizeIndex, setFontSizeIndex] = useState(2); // default to 'text-lg'
@@ -120,6 +120,14 @@ function SessionPageContent() {
   const isHost = session?.hostId === user?.uid;
   const canChangeSong = isHost || userProfile?.role === 'admin' || userProfile?.role === 'creator';
 
+  // Set showChords to true for the host, and false by default for guests.
+  useEffect(() => {
+    if (session && user) { // ensure data is loaded
+      if (session.hostId === user.uid) {
+        setShowChords(true);
+      }
+    }
+  }, [session, user]);
 
   // Global songs for the host's dropdown
   const allSongsRef = useMemoFirebase(
