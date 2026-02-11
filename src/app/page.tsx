@@ -113,7 +113,10 @@ function SessionCard({
   const hasArtwork = !songLoading && song?.artworkUrl;
 
   return (
-    <Card className="flex flex-col group relative overflow-hidden">
+    <Card
+      className="flex flex-col group relative overflow-hidden cursor-pointer"
+      onClick={handleJoin}
+    >
       {hasArtwork && (
         <div className="absolute top-0 right-0 h-full w-1/2 opacity-40 group-hover:opacity-60 transition-opacity duration-300">
             <Image
@@ -154,14 +157,18 @@ function SessionCard({
         </div>
       </CardContent>
       <CardFooter className="flex justify-between items-center gap-2 relative">
-        <Button className="w-full" onClick={handleJoin}>
+        <Button className="w-full">
           <LogIn className="mr-2" />
           Beitreten
         </Button>
         {userProfile?.role === 'admin' && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="icon">
+              <Button
+                variant="destructive"
+                size="icon"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </AlertDialogTrigger>
@@ -278,7 +285,7 @@ function HomeComponent() {
       <header className="p-4 flex justify-between items-center border-b gap-4">
         <div className="flex items-center gap-3 shrink-0">
           <Music className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">SyncScroll</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Aldene Singt</h1>
         </div>
         <div className="flex items-center flex-wrap justify-end gap-2">
           {canCreateSongs && (
@@ -430,7 +437,7 @@ function HomeComponent() {
       </main>
       <footer className="p-4 text-center text-sm text-muted-foreground">
         <p>
-          &copy; {new Date().getFullYear()} SyncScroll. Alle Rechte
+          &copy; {new Date().getFullYear()} Aldene Singt. Alle Rechte
           vorbehalten.
         </p>
       </footer>

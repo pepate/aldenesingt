@@ -98,7 +98,7 @@ function SessionPageContent() {
 
   useEffect(() => {
     // Ensure this runs only on the client and uses the custom domain
-    setSessionUrl(`https://qkqk.de/session/${sessionId}`);
+    setSessionUrl(`https://aldene.de/session/${sessionId}`);
   }, [sessionId]);
   
   const userProfileRef = useMemoFirebase(
@@ -605,7 +605,7 @@ function SessionPageContent() {
                 )}
                 <div className="overflow-hidden flex-1">
                   <div className="font-semibold text-lg truncate leading-tight">
-                    {currentSong?.title || 'SyncScroll'}
+                    {currentSong?.title || 'Aldene Singt'}
                   </div>
                   {currentSong?.artist && (
                     <div className="text-sm text-muted-foreground truncate">

@@ -1,4 +1,4 @@
-# **App Name**: SyncScroll
+# **App Name**: Aldene Singt
 
 ## Core Features:
 

@@ -1,6 +1,6 @@
 {
-  "name": "SyncScroll",
-  "short_name": "SyncScroll",
+  "name": "Aldene Singt",
+  "short_name": "AldeneSingt",
   "description": "Synchronisierte Song-Anzeige für Musiker.",
   "start_url": "/",
   "display": "standalone",

@@ -5,8 +5,8 @@ import { FirebaseProvider } from '@/firebase/provider';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 
 export const metadata: Metadata = {
-  title: 'SyncScroll',
-  description: 'Synchronisierte PDF-Anzeige für Musiker.',
+  title: 'Aldene Singt',
+  description: 'Synchronisierte Lyrics Anzeige für Musiker.',
 };
 
 export default function RootLayout({
