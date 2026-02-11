@@ -226,16 +226,19 @@ function HomeComponent() {
   }, [sessions, user]);
 
 
-  const canCreateContent =
+  const canCreateSongs =
     userProfile &&
     (userProfile.role === 'creator' || userProfile.role === 'admin');
 
+  // Any user with a profile can start a session.
+  const canStartSession = !!userProfile;
+
   const songsCollectionRef = useMemoFirebase(
     () =>
-      firestore && canCreateContent
+      firestore && canStartSession
         ? collection(firestore, 'songs')
         : null,
-    [firestore, canCreateContent]
+    [firestore, canStartSession]
   );
   const { data: songs, loading: songsLoading } =
     useCollection<Song>(songsCollectionRef);
@@ -244,7 +247,7 @@ function HomeComponent() {
     userLoading ||
     profileLoading ||
     sessionsLoading ||
-    (canCreateContent && songsLoading);
+    (canStartSession && songsLoading);
 
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
@@ -287,12 +290,15 @@ function HomeComponent() {
           <h1 className="text-3xl font-bold text-foreground">SyncScroll</h1>
         </div>
         <div className="flex items-center gap-4">
-          {canCreateContent && (
+          {canCreateSongs && (
+            <Button variant="ghost" onClick={() => router.push('/library')}>
+              <Library className="mr-2" />
+              Songs
+            </Button>
+          )}
+
+          {canStartSession && (
             <>
-              <Button variant="ghost" onClick={() => router.push('/library')}>
-                <Library className="mr-2" />
-                Songs
-              </Button>
               {userSession ? (
                  <Button onClick={() => router.push(`/session/${userSession.id}`)}>
                     <Share2 className="mr-2 h-4 w-4" /> Session öffnen
@@ -374,6 +380,7 @@ function HomeComponent() {
               )}
             </>
           )}
+
           {user ? (
             <UserNav />
           ) : (

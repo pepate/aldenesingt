@@ -7,8 +7,8 @@
  * It now supports anonymous users for viewing and joining sessions.
  *
  * Roles:
- * - 'user': Can view/join sessions. Can "upgrade" to a permanent account. Includes anonymous users.
- * - 'creator': Can do everything a 'user' can, plus create sessions and generate a limited number of new songs per day.
+ * - 'user': Can view/join sessions. Can "upgrade" to a permanent account. Can create sessions.
+ * - 'creator': Can do everything a 'user' can, plus generate a limited number of new songs per day.
  * - 'admin': Has full access, including the ability to manage user roles and create sessions.
  *
  * Data Structure & Access:
@@ -97,7 +97,7 @@ service cloud.firestore {
     match /sessions/{sessionId} {
       allow get, list: if true;
       // A user can only create a session document where the ID matches their own user ID.
-      allow create: if canCreateContent()
+      allow create: if isSignedIn()
                     && request.resource.data.hostId == request.auth.uid
                     && sessionId == request.auth.uid;
       allow update: if isSignedIn() && isHost(sessionId);
