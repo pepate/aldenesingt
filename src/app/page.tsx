@@ -121,13 +121,13 @@ function SessionCard({
   return (
     <Card className="flex flex-col group relative overflow-hidden">
       {hasArtwork && (
-        <div className="absolute top-0 right-0 h-full w-1/3 opacity-40 group-hover:opacity-60 transition-opacity duration-300">
+        <div className="absolute top-0 right-0 h-full w-1/2 opacity-40 group-hover:opacity-60 transition-opacity duration-300">
             <Image
                 src={song.artworkUrl!}
                 alt=""
                 fill
                 className="object-cover"
-                sizes="33vw"
+                sizes="50vw"
             />
             <div className="absolute inset-0 bg-gradient-to-l from-transparent via-background/50 to-background" />
         </div>
