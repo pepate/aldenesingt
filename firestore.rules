@@ -66,16 +66,23 @@ service cloud.firestore {
      * @path /users/{userId}
      */
     match /users/{userId} {
-      // Publicly readable to show host names on session cards.
-      // Sensitive data like email is exposed, but necessary for the feature.
-      allow get: if true; 
-      allow list: if isAdmin();
+      // Allow reading single profiles if signed in (incl. anonymous).
+      // This is needed for showing host names on session cards.
+      allow get: if isSignedIn();
+
+      // Allow admins to list all user profiles.
+      // This is an explicit rule for the list operation.
+      allow list: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+
+      // Allow users to create their own profile document.
       allow create: if isOwner(userId);
+
       // 1. Owners can update their own profile, but cannot change their role.
-      // 2. Admins can update a user's profile, but not another admin's.
-      // 3. The UI prevents assigning the 'admin' role, this rule provides defense-in-depth.
+      // 2. Admins can update any user's profile, but not another admin's profile.
       allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role)
                     || (isAdmin() && resource.data.role != 'admin');
+
+      // Allow owners or admins to delete profiles.
       allow delete: if isAdmin() || isOwner(userId);
     }
 

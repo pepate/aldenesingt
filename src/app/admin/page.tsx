@@ -71,37 +71,21 @@ function AdminPage() {
   const isLoading = userLoading || profileLoading;
   const isAuthorized = !isLoading && currentUserProfile?.role === 'admin';
 
-  // Enhanced logging to debug the authorization flow
-  console.log('Auth Status Check:', {
-    userLoading,
-    profileLoading,
-    isLoading,
-    isAuthorized,
-    role: currentUserProfile?.role,
-    userExists: !!user,
-  });
-
   useEffect(() => {
     // This effect now robustly handles redirection.
     // It will NOT redirect until all loading is complete.
-    console.log('Authorization Effect Triggered:', { isLoading, isAuthorized });
-
     if (isLoading) {
-      console.log('Still loading data, waiting for authorization decision...');
       return; // Do nothing until all data is loaded
     }
 
     // Once loading is complete, make a final decision.
     if (!isAuthorized) {
-      console.log('Redirecting: Loading complete and user is NOT authorized.');
       toast({
         variant: 'destructive',
         title: 'Zugriff verweigert',
         description: 'Sie haben keine Berechtigung für diese Seite.',
       });
       router.push('/');
-    } else {
-      console.log('Access Granted: Loading complete and user is authorized.');
     }
   }, [isLoading, isAuthorized, router, toast]);
 
