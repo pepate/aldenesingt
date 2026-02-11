@@ -58,6 +58,7 @@ function AdminPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   const currentUserProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -79,9 +80,16 @@ function AdminPage() {
   const authLoading = userLoading || profileLoading;
 
   useEffect(() => {
-    // This effect handles redirection after loading is complete
+    // This effect handles redirection and authorization state
     if (!authLoading) {
-      if (!currentUserProfile || (currentUserProfile.role !== 'admin' && currentUserProfile.role !== 'superadmin')) {
+      const hasPermission =
+        currentUserProfile &&
+        (currentUserProfile.role === 'admin' ||
+          currentUserProfile.role === 'superadmin');
+
+      if (hasPermission) {
+        setIsAuthorized(true);
+      } else {
         toast({
           variant: 'destructive',
           title: 'Zugriff verweigert',
@@ -137,9 +145,9 @@ function AdminPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  // This shows a loader while we are loading or before the redirect effect runs.
-  // This prevents the page content from flashing.
-  if (authLoading || !currentUserProfile || (currentUserProfile.role !== 'admin' && currentUserProfile.role !== 'superadmin')) {
+  // This shows a loader until we are certain the user is authorized.
+  // This prevents the page content from flashing before redirection.
+  if (!isAuthorized) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
