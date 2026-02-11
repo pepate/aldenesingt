@@ -46,6 +46,7 @@ const roleConfig: {
 };
 
 function AdminPage() {
+  console.log('--- AdminPage Re-render ---');
   const { user, loading: userLoading } = useUser();
   const { firestore } = useFirebase();
   const router = useRouter();
@@ -69,25 +70,35 @@ function AdminPage() {
   } = useCollection<UserProfile>(usersRef);
 
   const isLoading = userLoading || profileLoading;
-  const isAuthorized = !isLoading && currentUserProfile?.role === 'admin';
+  
+  console.log('[State Log]', {
+    'userLoading': userLoading,
+    'profileLoading': profileLoading,
+    'isLoading': isLoading,
+    'user': user ? user.uid : null,
+    'currentUserProfile': currentUserProfile,
+    'isAdmin': currentUserProfile?.role === 'admin'
+  });
 
   useEffect(() => {
-    // This effect now robustly handles redirection.
-    // It will NOT redirect until all loading is complete.
-    if (isLoading) {
-      return; // Do nothing until all data is loaded
-    }
-
-    // Once loading is complete, make a final decision.
-    if (!isAuthorized) {
+    console.log('[Effect Log] Checking authorization...', { isLoading, currentUserProfile });
+    
+    // This effect now only handles the redirection logic when loading is complete and user is not authorized.
+    // It will not run while `isLoading` is true.
+    if (!isLoading && currentUserProfile?.role !== 'admin') {
+      console.log('[Effect Log] NOT an admin. Redirecting now.');
       toast({
         variant: 'destructive',
         title: 'Zugriff verweigert',
         description: 'Sie haben keine Berechtigung für diese Seite.',
       });
       router.push('/');
+    } else if (!isLoading) {
+      console.log('[Effect Log] Is an admin. No redirect needed.');
+    } else {
+       console.log('[Effect Log] Still loading...');
     }
-  }, [isLoading, isAuthorized, router, toast]);
+  }, [isLoading, currentUserProfile, router, toast]);
 
   const userProfiles = useMemo(() => {
     if (!fetchedUsers) return [];
@@ -132,9 +143,9 @@ function AdminPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  // This is the primary guard. It shows a loader until a final authorization
-  // decision can be made. This prevents any content flash.
-  if (isLoading || !isAuthorized) {
+  // 1. Show a loader as long as ANY data is loading.
+  if (isLoading) {
+    console.log('[Render Log] Showing loader because isLoading is true.');
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
@@ -143,7 +154,20 @@ function AdminPage() {
     );
   }
 
-  // At this point, we are sure the user is an authorized admin.
+  // 2. After loading, if the user is not an admin, show a "redirecting" message.
+  // The useEffect will handle the actual redirection. This prevents flashing the content.
+  if (currentUserProfile?.role !== 'admin') {
+     console.log('[Render Log] Showing redirect message because user is not admin.');
+     return (
+        <div className="flex h-screen items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin" />
+            <span className="ml-4">Zugriff verweigert. Leite weiter...</span>
+        </div>
+     );
+  }
+  
+  // 3. If we reach here, isLoading is false AND the user is an admin. Show the page.
+  console.log('[Render Log] Authorized. Showing admin page content.');
   return (
     <div className="min-h-screen bg-background">
       <header className="p-4 sm:p-6 flex justify-between items-center border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
