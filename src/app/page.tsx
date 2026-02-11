@@ -168,8 +168,7 @@ function SessionCard({
           <LogIn className="mr-2" />
           Beitreten
         </Button>
-        {(userProfile?.role === 'admin' ||
-          userProfile?.role === 'superadmin') && (
+        {userProfile?.role === 'admin' && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="icon">
@@ -221,18 +220,16 @@ function HomeComponent() {
   const { data: sessions, loading: sessionsLoading } =
     useCollection<Session>(sessionsRef);
 
-  const showAdminFeatures =
+  const canCreateContent =
     userProfile &&
-    (userProfile.role === 'creator' ||
-      userProfile.role === 'admin' ||
-      userProfile.role === 'superadmin');
+    (userProfile.role === 'creator' || userProfile.role === 'admin');
 
   const songsCollectionRef = useMemoFirebase(
     () =>
-      firestore && showAdminFeatures
+      firestore && canCreateContent
         ? collection(firestore, 'songs')
         : null,
-    [firestore, showAdminFeatures]
+    [firestore, canCreateContent]
   );
   const { data: songs, loading: songsLoading } =
     useCollection<Song>(songsCollectionRef);
@@ -241,7 +238,7 @@ function HomeComponent() {
     userLoading ||
     profileLoading ||
     sessionsLoading ||
-    (showAdminFeatures && songsLoading);
+    (canCreateContent && songsLoading);
 
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
@@ -284,7 +281,7 @@ function HomeComponent() {
           <h1 className="text-3xl font-bold text-foreground">SyncScroll</h1>
         </div>
         <div className="flex items-center gap-4">
-          {showAdminFeatures && (
+          {canCreateContent && (
             <>
               <Button variant="ghost" onClick={() => router.push('/library')}>
                 <Library className="mr-2" />

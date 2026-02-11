@@ -42,7 +42,7 @@ export type UserProfile = {
   displayName: string | null;
   photoURL: string | null;
   createdAt: any;
-  role: 'superadmin' | 'admin' | 'creator' | 'user';
+  role: 'admin' | 'creator' | 'user';
   songsGeneratedToday: number;
   lastGenerationDate: string; // YYYY-MM-DD
 };

@@ -52,8 +52,8 @@ export function UserNav() {
     return name.charAt(0).toUpperCase();
   };
   
-  const canSeeAdmin = userProfile?.role === 'admin' || userProfile?.role === 'superadmin';
-  const canSeeLibrary = userProfile?.role === 'creator' || userProfile?.role === 'admin' || userProfile?.role === 'superadmin';
+  const canSeeAdmin = userProfile?.role === 'admin';
+  const canSeeLibrary = userProfile?.role === 'creator' || userProfile?.role === 'admin';
 
 
   return (

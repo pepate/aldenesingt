@@ -10,19 +10,18 @@
  * - 'user': Can view/join sessions. Can "upgrade" to a permanent account. Includes anonymous users.
  * - 'creator': Can do everything a 'user' can, plus create sessions and generate a limited number of new songs per day.
  * - 'admin': Has full access, including the ability to manage user roles and create sessions.
- * - 'superadmin': Same as admin, but their role cannot be changed by another admin.
  *
  * Data Structure & Access:
  * - /users/{userId}: Private user profile, contains the 'role'.
- *   - Admins/Superadmins can list and read all user profiles.
- *   - Admins/Superadmins can update any user's profile/role, except for 'superadmin' roles.
+ *   - Admins can list and read all user profiles.
+ *   - Admins can update any user's profile/role, except for other 'admin' roles.
  *   - Users can update their own profile but are NOT allowed to change their own role.
  * - /songs/{songId}: Publicly-readable songs.
  *   - Reading is allowed by everyone (including anonymous).
- *   - Creating songs is restricted to 'creator', 'admin', and 'superadmin' roles.
+ *   - Creating songs is restricted to 'creator' and 'admin' roles.
  * - /sessions/{sessionId}: Collaborative sessions.
  *   - Reading and listing is public for all users (including anonymous).
- *   - Session creation is restricted to 'creator', 'admin', and 'superadmin' roles.
+ *   - Session creation is restricted to 'creator' and 'admin' roles.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -50,20 +49,12 @@ service cloud.firestore {
         return isRole('admin');
     }
 
-    function isSuperAdmin() {
-        return isRole('superadmin');
-    }
-
     function isCreator() {
         return isRole('creator');
     }
-    
-    function canManageUsers() {
-        return isAdmin() || isSuperAdmin();
-    }
 
     function canCreateContent() {
-        return isCreator() || isAdmin() || isSuperAdmin();
+        return isCreator() || isAdmin();
     }
 
     function isHost(sessionId) {
@@ -75,15 +66,15 @@ service cloud.firestore {
      * @path /users/{userId}
      */
     match /users/{userId} {
-      allow get: if isOwner(userId) || canManageUsers();
-      allow list: if canManageUsers();
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
       allow create: if isOwner(userId);
       // 1. Owners can update their own profile, but cannot change their role.
-      // 2. Admins/Superadmins can update a user's profile...
-      // 3. ...UNLESS that user is a superadmin. This protects superadmins from demotion.
+      // 2. Admins can update a user's profile, but not another admin's.
+      // 3. The UI prevents assigning the 'admin' role, this rule provides defense-in-depth.
       allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role)
-                    || (canManageUsers() && resource.data.role != 'superadmin');
-      allow delete: if canManageUsers() || isOwner(userId);
+                    || (isAdmin() && resource.data.role != 'admin');
+      allow delete: if isAdmin() || isOwner(userId);
     }
 
     /**
@@ -93,8 +84,8 @@ service cloud.firestore {
     match /songs/{songId} {
         allow read: if true;
         allow create: if canCreateContent() && request.resource.data.userId == request.auth.uid;
-        allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || canManageUsers());
-        allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || canManageUsers());
+        allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+        allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     /**
@@ -105,7 +96,7 @@ service cloud.firestore {
       allow get, list: if true;
       allow create: if canCreateContent() && request.resource.data.hostId == request.auth.uid;
       allow update: if isSignedIn() && isHost(sessionId);
-      allow delete: if isSignedIn() && (isHost(sessionId) || canManageUsers());
+      allow delete: if isSignedIn() && (isHost(sessionId) || isAdmin());
     }
   }
 }

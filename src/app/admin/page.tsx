@@ -46,7 +46,6 @@ import { UserNav } from '@/components/user-nav';
 const roleConfig: {
   [key in UserProfile['role']]: { label: string; icon: React.ElementType };
 } = {
-  superadmin: { label: 'Super Admin', icon: Shield },
   admin: { label: 'Admin', icon: Shield },
   creator: { label: 'Creator', icon: UserCheck },
   user: { label: 'User', icon: UserCog },
@@ -83,9 +82,7 @@ function AdminPage() {
     // This effect handles redirection and authorization state
     if (!authLoading) {
       const hasPermission =
-        currentUserProfile &&
-        (currentUserProfile.role === 'admin' ||
-          currentUserProfile.role === 'superadmin');
+        currentUserProfile && currentUserProfile.role === 'admin';
 
       if (hasPermission) {
         setIsAuthorized(true);
@@ -239,7 +236,7 @@ function AdminPage() {
                         : '-'}
                     </TableCell>
                     <TableCell className="text-right">
-                      {userProfile.role === 'superadmin' ? (
+                      {userProfile.role === 'admin' ? (
                         <span className="text-xs text-muted-foreground">
                           Nicht änderbar
                         </span>
@@ -257,7 +254,6 @@ function AdminPage() {
                             <SelectValue placeholder="Rolle ändern" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="admin">Admin</SelectItem>
                             <SelectItem value="creator">Creator</SelectItem>
                             <SelectItem value="user">User</SelectItem>
                           </SelectContent>

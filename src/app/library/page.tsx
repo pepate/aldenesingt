@@ -277,9 +277,7 @@ function LibraryPage() {
     if (
       !firestore ||
       !user ||
-      (user.uid !== songToDelete.userId &&
-        userProfile?.role !== 'admin' &&
-        userProfile?.role !== 'superadmin')
+      (user.uid !== songToDelete.userId && userProfile?.role !== 'admin')
     )
       return;
     try {
@@ -346,9 +344,7 @@ function LibraryPage() {
   if (
     !user ||
     !userProfile ||
-    (userProfile.role !== 'creator' &&
-      userProfile.role !== 'admin' &&
-      userProfile.role !== 'superadmin')
+    (userProfile.role !== 'creator' && userProfile.role !== 'admin')
   ) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-background text-center p-4">
@@ -367,9 +363,7 @@ function LibraryPage() {
   }
 
   const canGenerate =
-    userProfile?.role === 'creator' ||
-    userProfile?.role === 'admin' ||
-    userProfile?.role === 'superadmin';
+    userProfile?.role === 'creator' || userProfile?.role === 'admin';
 
   return (
     <div className="min-h-screen bg-background">
@@ -723,8 +717,7 @@ function LibraryPage() {
                           <Pencil className="h-4 w-4" />
                         </Button>
                         {(user?.uid === songItem.userId ||
-                          userProfile?.role === 'admin' ||
-                          userProfile?.role === 'superadmin') && (
+                          userProfile?.role === 'admin') && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="ghost" size="icon">
