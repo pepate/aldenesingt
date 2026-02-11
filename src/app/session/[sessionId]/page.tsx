@@ -210,7 +210,7 @@ function SessionPageContent() {
     }
   };
 
-  const handleTranspose = async (amount: number) => {
+  const handleTranspose = (amount: number) => {
     if (!sessionRef || !isHost || session === null) return;
 
     const newTranspose = (session.transpose || 0) + amount;
@@ -219,9 +219,7 @@ function SessionPageContent() {
       lastActivity: serverTimestamp(),
     };
 
-    try {
-      await updateDoc(sessionRef, updateData);
-    } catch (error: any) {
+    updateDoc(sessionRef, updateData).catch(async (error: any) => {
       console.error('Failed to update transpose value:', error);
       if (error.code === 'permission-denied') {
         const permissionError = new FirestorePermissionError({
@@ -237,7 +235,7 @@ function SessionPageContent() {
           description: 'Transponierung konnte nicht geändert werden.',
         });
       }
-    }
+    });
   };
 
   const handleFontSizeChange = (amount: number) => {

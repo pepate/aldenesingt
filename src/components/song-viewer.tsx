@@ -37,6 +37,8 @@ interface SongViewerProps {
   fontSize: string;
 }
 
+const DEBOUNCE_TIME = 200;
+
 // Chord Helper Component for mobile editing
 const ChordHelper = ({ onInsert }: { onInsert: (text: string) => void }) => {
   const rootNotes = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
