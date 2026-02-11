@@ -37,8 +37,6 @@ interface SongViewerProps {
   fontSize: string;
 }
 
-const DEBOUNCE_TIME = 200;
-
 // Chord Helper Component for mobile editing
 const ChordHelper = ({ onInsert }: { onInsert: (text: string) => void }) => {
   const rootNotes = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -396,7 +394,7 @@ export default function SongViewer({
                               )
                             }
                             inputMode={isMobile ? 'none' : 'text'}
-                            className="font-code text-primary font-bold bg-muted/50 border-primary/20 h-8"
+                            className="font-code text-accent font-bold bg-muted/50 border-accent/20 h-8"
                             placeholder="Akkorde..."
                           />
                           <Input
@@ -455,7 +453,7 @@ export default function SongViewer({
                 className={cn('flex flex-col mb-1 font-code', fontSize)}
               >
                 {showChords && line.chords && (
-                  <div className="text-primary font-bold whitespace-pre-wrap">
+                  <div className="text-accent font-bold whitespace-pre-wrap">
                     {line.chords}
                   </div>
                 )}
