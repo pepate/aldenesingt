@@ -113,9 +113,18 @@ service cloud.firestore {
        */
       match /sessionParticipants/{sessionParticipantId} {
         allow get, list: if true;
-        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.sessionId == sessionId;
+        // The user creating the participant document must be the participant.
+        // They can only create a document with their own UID as the ID.
+        // The session must also exist.
+        allow create: if request.auth.uid == sessionParticipantId
+                      && request.auth.uid == request.resource.data.userId
+                      && request.resource.data.sessionId == sessionId
+                      && exists(/databases/$(database)/documents/sessions/$(sessionId));
+
         allow update: if false;
-        allow delete: if resource != null && (isOwner(resource.data.userId) || isHost(sessionId));
+
+        // The user who owns the participant document, or the host of the session can delete it.
+        allow delete: if resource != null && (request.auth.uid == resource.data.userId || isHost(sessionId));
       }
     }
   }
