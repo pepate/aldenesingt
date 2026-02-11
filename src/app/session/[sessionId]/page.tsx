@@ -483,24 +483,33 @@ function SessionPageContent() {
                     variant="outline"
                     role="combobox"
                     aria-expanded={songSelectorOpen}
-                    className="w-full font-semibold text-lg justify-between"
+                    className="w-full justify-between h-auto p-2 text-left"
                     disabled={!allSongs || allSongs.length === 0 || isEditing}
                   >
-                    <div className="flex items-center gap-2 overflow-hidden text-left">
+                    <div className="flex items-center gap-3 w-full">
                       {currentSong?.artworkUrl ? (
                         <Image
                           src={currentSong.artworkUrl}
                           alt={currentSong.title}
-                          width={24}
-                          height={24}
-                          className="rounded-sm"
+                          width={32}
+                          height={32}
+                          className="rounded-sm object-cover"
                         />
                       ) : (
-                        <Music className="h-5 w-5 flex-shrink-0" />
+                        <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
+                          <Music className="h-5 w-5" />
+                        </div>
                       )}
-                      <span className="truncate">
-                        {currentSong?.title ?? 'Wähle einen Song...'}
-                      </span>
+                      <div className="overflow-hidden flex-1">
+                        <div className="font-semibold text-lg truncate leading-tight">
+                          {currentSong?.title ?? 'Wähle einen Song...'}
+                        </div>
+                        {currentSong?.artist && (
+                          <div className="text-sm text-muted-foreground truncate">
+                            {currentSong.artist}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -563,9 +572,31 @@ function SessionPageContent() {
                 </PopoverContent>
               </Popover>
             ) : (
-              <span className="font-semibold text-lg truncate">
-                {currentSong?.title || 'SyncScroll'}
-              </span>
+              <div className="flex items-center gap-3 w-full">
+                {currentSong?.artworkUrl ? (
+                  <Image
+                    src={currentSong.artworkUrl}
+                    alt={currentSong.title}
+                    width={32}
+                    height={32}
+                    className="rounded-sm object-cover"
+                  />
+                ) : (
+                  <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-muted rounded-sm text-muted-foreground">
+                    <Music className="h-5 w-5" />
+                  </div>
+                )}
+                <div className="overflow-hidden flex-1">
+                  <div className="font-semibold text-lg truncate leading-tight">
+                    {currentSong?.title || 'SyncScroll'}
+                  </div>
+                  {currentSong?.artist && (
+                    <div className="text-sm text-muted-foreground truncate">
+                      {currentSong.artist}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </div>
