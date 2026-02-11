@@ -66,13 +66,12 @@ service cloud.firestore {
      * @path /users/{userId}
      */
     match /users/{userId} {
-      // Allow reading single profiles if signed in (incl. anonymous).
-      // This is needed for showing host names on session cards.
-      allow get: if isSignedIn();
+      // Allow reading a profile only if you are the owner or an admin.
+      // Public data like displayName is denormalized into other documents (e.g., sessions).
+      allow get: if isOwner(userId) || isAdmin();
 
       // Allow admins to list all user profiles.
-      // This is an explicit rule for the list operation.
-      allow list: if isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow list: if isAdmin();
 
       // Allow users to create their own profile document.
       allow create: if isOwner(userId);

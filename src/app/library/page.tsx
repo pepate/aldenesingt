@@ -428,15 +428,14 @@ function LibraryPage() {
   };
 
   const createSession = async (songId: string) => {
-    if (!user || !firestore) return;
-
-    const sessionId = user.uid; // Use user's UID as session ID
-
+    if (!user || !firestore || !userProfile) return;
+    const sessionId = user.uid;
     try {
       const sessionRef = doc(firestore, 'sessions', sessionId);
       await setDoc(sessionRef, {
         id: sessionId,
         hostId: user.uid,
+        hostName: userProfile.displayName || user.displayName || 'Unbekannter Host',
         songId: songId,
         scroll: 0,
         transpose: 0,

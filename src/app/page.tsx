@@ -87,12 +87,6 @@ function SessionCard({
     [firestore, session.songId]
   );
   const { data: song, loading: songLoading } = useDoc<Song>(songRef);
-    
-  const hostProfileRef = useMemoFirebase(
-    () => (firestore ? doc(firestore, 'users', session.hostId) : null),
-    [firestore, session.hostId]
-  );
-  const { data: hostProfile, loading: hostProfileLoading } = useDoc<UserProfile>(hostProfileRef);
 
   const handleJoin = () => {
     router.push(`/session/${session.id}`);
@@ -154,13 +148,9 @@ function SessionCard({
       <CardContent className="flex-shrink-0 text-sm pt-0 relative">
          <div className="flex items-center gap-2 text-muted-foreground">
             <Crown className="h-4 w-4 text-amber-400" />
-            {hostProfileLoading ? (
-                <div className="h-4 w-32 rounded animate-pulse bg-muted" />
-            ) : (
-                <span className="truncate">
-                    {hostProfile?.displayName || 'Unbekannter Host'}
-                </span>
-            )}
+            <span className="truncate">
+                {session.hostName || 'Unbekannter Host'}
+            </span>
         </div>
       </CardContent>
       <CardFooter className="flex justify-between items-center gap-2 relative">
@@ -250,13 +240,14 @@ function HomeComponent() {
     (canStartSession && songsLoading);
 
   const createSession = async (songId: string) => {
-    if (!user || !firestore) return;
+    if (!user || !firestore || !userProfile) return;
     const sessionId = user.uid; // Use user's UID as session ID
     try {
       const sessionRef = doc(firestore, 'sessions', sessionId);
       await setDoc(sessionRef, {
         id: sessionId,
         hostId: user.uid,
+        hostName: userProfile.displayName || user.displayName || 'Unbekannter Host',
         songId: songId,
         scroll: 0,
         transpose: 0,

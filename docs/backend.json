@@ -135,6 +135,10 @@
           "type": "string",
           "description": "The user ID of the session host."
         },
+        "hostName": {
+            "type": "string",
+            "description": "The display name of the session host."
+        },
         "songId": {
           "type": "string",
           "description": "The ID of the song document being viewed."
@@ -158,7 +162,7 @@
           "description": "Timestamp of the last interaction to enable TTL."
         }
       },
-      "required": ["id", "hostId", "songId", "scroll", "createdAt", "lastActivity"]
+      "required": ["id", "hostId", "hostName", "songId", "scroll", "createdAt", "lastActivity"]
     }
   },
   "auth": {

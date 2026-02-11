@@ -31,6 +31,7 @@ export type Session = {
   songId: string;
   scroll: number;
   hostId: string;
+  hostName: string;
   transpose: number;
   createdAt: any;
   lastActivity: any;
