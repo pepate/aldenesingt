@@ -338,7 +338,7 @@ export default function SongViewer({
     return (
       <div
         className="h-full w-full overflow-y-auto bg-background p-4 sm:p-6 md:p-8"
-        style={{ paddingBottom: activeInput ? '10rem' : 'initial' }}
+        style={{ paddingBottom: isMobile ? '10rem' : 'initial' }}
       >
         <div className="max-w-2xl mx-auto">
           <Tabs
@@ -389,17 +389,6 @@ export default function SongViewer({
                               });
                               setCursorPosition(e.target.selectionStart ?? 0);
                             }}
-                            onBlur={() => {
-                              setTimeout(() => {
-                                if (
-                                  document.activeElement?.closest(
-                                    '.chord-helper-toolbar'
-                                  )
-                                )
-                                  return;
-                                setActiveInput(null);
-                              }, 200);
-                            }}
                             onSelect={(e) =>
                               setCursorPosition(
                                 (e.target as HTMLInputElement)
@@ -425,7 +414,7 @@ export default function SongViewer({
             })}
           </Tabs>
         </div>
-        {activeInput && <ChordHelper onInsert={handleInsertChordText} />}
+        {isMobile && <ChordHelper onInsert={handleInsertChordText} />}
       </div>
     );
   }
