@@ -40,7 +40,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-
+import { Input } from '@/components/ui/input';
 
 const FONT_SIZES = ['text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl'];
 
@@ -58,6 +58,8 @@ function SongPageContent() {
   const [initialCheckComplete, setInitialCheckComplete] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedSheet, setEditedSheet] = useState<SongSheet | null>(null);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedArtist, setEditedArtist] = useState('');
   const [transpose, setTranspose] = useState(0);
   const [showChords, setShowChords] = useState(true);
   const [fontSizeIndex, setFontSizeIndex] = useState(2); // default to 'text-lg'
@@ -95,7 +97,7 @@ function SongPageContent() {
       router.push('/library');
     }
   }, [songError, router, toast]);
-  
+
   useEffect(() => {
     if (initialCheckComplete && !song) {
       toast({
@@ -106,7 +108,7 @@ function SongPageContent() {
       router.push('/library');
     }
   }, [initialCheckComplete, song, router, toast]);
-  
+
   // Timer to manage the grace period for song loading
   useEffect(() => {
     if (!songLoading) {
@@ -119,22 +121,30 @@ function SongPageContent() {
 
   // When song data loads, initialize the editedSheet state
   useEffect(() => {
-    if (song?.sheet) {
-      setEditedSheet(cloneDeep(song.sheet));
+    if (song) {
+      if (song.sheet) {
+        setEditedSheet(cloneDeep(song.sheet));
+      }
+      setEditedTitle(song.title);
+      setEditedArtist(song.artist);
     }
   }, [song]);
 
   const handleSaveEdits = async () => {
-    if (!songRef || !editedSheet) return;
+    if (!songRef || !editedSheet || !editedTitle || !editedArtist) return;
     try {
-      await updateDoc(songRef, { sheet: editedSheet });
+      await updateDoc(songRef, {
+        sheet: editedSheet,
+        title: editedTitle,
+        artist: editedArtist,
+      });
       toast({
         title: 'Gespeichert',
-        description: 'Änderungen am Song-Sheet wurden gespeichert.',
+        description: 'Änderungen am Song wurden gespeichert.',
       });
       setIsEditing(false);
     } catch (error: any) {
-      console.error('Failed to save song sheet:', error);
+      console.error('Failed to save song:', error);
       toast({
         variant: 'destructive',
         title: 'Speichern fehlgeschlagen',
@@ -145,12 +155,16 @@ function SongPageContent() {
   };
 
   const handleCancelEdit = () => {
-    if (song?.sheet) {
-      setEditedSheet(cloneDeep(song.sheet));
+    if (song) {
+      if (song.sheet) {
+        setEditedSheet(cloneDeep(song.sheet));
+      }
+      setEditedTitle(song.title);
+      setEditedArtist(song.artist);
     }
     setIsEditing(false);
   };
-  
+
   const handleDelete = async () => {
     if (!songRef || !song) return;
     try {
@@ -170,7 +184,6 @@ function SongPageContent() {
     }
   };
 
-
   const handleTranspose = (amount: number) => {
     setTranspose((prev) => prev + amount);
   };
@@ -184,7 +197,7 @@ function SongPageContent() {
     localStorage.setItem('song-viewer-font-size-index', String(newIndex));
   };
 
-  if ((songLoading || !initialCheckComplete) || !song || !editedSheet) {
+  if (songLoading || !initialCheckComplete || !song || !editedSheet) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -207,9 +220,29 @@ function SongPageContent() {
           </Button>
           <div className="flex items-center gap-2">
             <Music className="h-6 w-6 text-primary" />
-            <span className="font-semibold text-lg">
-              {song?.title || 'Song-Ansicht'}
-            </span>
+            {isEditing ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Titel"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                />
+                <Input
+                  placeholder="Interpret"
+                  value={editedArtist}
+                  onChange={(e) => setEditedArtist(e.target.value)}
+                />
+              </div>
+            ) : (
+              <div>
+                <span className="font-semibold text-lg leading-tight block truncate">
+                  {song?.title || 'Song-Ansicht'}
+                </span>
+                <span className="text-sm text-muted-foreground block truncate">
+                  {song?.artist}
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center justify-end flex-wrap gap-x-2 sm:gap-x-4 gap-y-2">
@@ -302,10 +335,14 @@ function SongPageContent() {
                 </div>
               </>
             )}
-             {canDelete && (
+            {canDelete && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="icon" className="h-8 w-8">
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="h-8 w-8"
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </AlertDialogTrigger>

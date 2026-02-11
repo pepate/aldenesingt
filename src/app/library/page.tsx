@@ -150,6 +150,7 @@ function LibraryPage() {
   // Generation flow state
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
+  const [manualAddDialogOpen, setManualAddDialogOpen] = useState(false);
   const [isFetchingLyrics, setIsFetchingLyrics] = useState(false);
   const [generationInfo, setGenerationInfo] = useState<{
     title: string;
@@ -158,6 +159,12 @@ function LibraryPage() {
   } | null>(null);
   const [lyrics, setLyrics] = useState('');
   const [selectedKey, setSelectedKey] = useState('C');
+  const [manualForm, setManualForm] = useState({
+    title: '',
+    artist: '',
+    lyrics: '',
+    key: 'C',
+  });
 
   // Session dialog state
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false);
@@ -341,7 +348,85 @@ function LibraryPage() {
       setGenerationInfo(null);
     }
   };
-  
+
+  const handleManualFormChange = (
+    field: keyof typeof manualForm,
+    value: string
+  ) => {
+    setManualForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleManualGenerateSheet = async () => {
+    if (
+      !user ||
+      !firestore ||
+      !manualForm.title ||
+      !manualForm.artist ||
+      !manualForm.lyrics ||
+      !manualForm.key
+    ) {
+      toast({
+        variant: 'destructive',
+        title: 'Fehlende Informationen',
+        description: 'Bitte füllen Sie alle Felder aus.',
+      });
+      return;
+    }
+
+    if (!userProfileRef) return;
+    setIsGenerating(true);
+
+    try {
+      const sheet = await generateSongSheet({
+        artist: manualForm.artist,
+        title: manualForm.title,
+        lyrics: manualForm.lyrics,
+        key: manualForm.key,
+      });
+
+      const songsCollectionRef = collection(firestore, 'songs');
+      await addDoc(songsCollectionRef, {
+        userId: user.uid,
+        creatorName: user.displayName || user.email || 'Anonym',
+        title: manualForm.title,
+        artist: manualForm.artist,
+        sheet: { ...sheet, key: manualForm.key },
+        createdAt: serverTimestamp(),
+        artworkUrl: null, // No artwork for manually added songs
+      });
+
+      if (userProfile?.role === 'creator') {
+        const today = new Date().toISOString().split('T')[0];
+        const newCount =
+          userProfile.lastGenerationDate === today
+            ? (userProfile.songsGeneratedToday || 0) + 1
+            : 1;
+        await updateDoc(userProfileRef, {
+          songsGeneratedToday: newCount,
+          lastGenerationDate: today,
+        });
+      }
+
+      toast({
+        title: 'Song generiert & gespeichert',
+        description: `"${manualForm.title}" wurde zur Bibliothek hinzugefügt.`,
+      });
+
+      setManualAddDialogOpen(false);
+      setManualForm({ title: '', artist: '', lyrics: '', key: 'C' });
+    } catch (error: any) {
+      console.error('Manual Generation Error: ', error);
+      toast({
+        variant: 'destructive',
+        title: 'Generierung fehlgeschlagen',
+        description:
+          error.message || 'Das Song-Sheet konnte nicht erstellt werden.',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
 
@@ -517,8 +602,8 @@ function LibraryPage() {
                 Neuen Song mit KI generieren
               </CardTitle>
               <CardDescription>
-                Suche nach einem Song, um Texte zu finden und Akkorde mit KI zu
-                generieren.
+                Suchen Sie nach einem Song auf iTunes oder fügen Sie manuell
+                einen hinzu.
                 {userProfile?.role === 'creator' &&
                   ` (${
                     5 -
@@ -541,6 +626,26 @@ function LibraryPage() {
                     disabled={isGenerating}
                   />
                 </div>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">
+                      Oder
+                    </span>
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setManualAddDialogOpen(true)}
+                  disabled={isGenerating}
+                >
+                  Song manuell erstellen
+                </Button>
 
                 {isSearchingItunes && (
                   <div className="flex items-center justify-center p-4">
@@ -591,7 +696,7 @@ function LibraryPage() {
           </Card>
         )}
 
-        {/* Generation Dialog */}
+        {/* iTunes Generation Dialog */}
         <Dialog
           open={generationDialogOpen}
           onOpenChange={setGenerationDialogOpen}
@@ -663,6 +768,117 @@ function LibraryPage() {
               <Button
                 onClick={handleGenerateSheet}
                 disabled={isGenerating || isFetchingLyrics || !lyrics}
+              >
+                {isGenerating && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Generieren
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Manual Add Dialog */}
+        <Dialog
+          open={manualAddDialogOpen}
+          onOpenChange={setManualAddDialogOpen}
+        >
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Song manuell erstellen</DialogTitle>
+              <DialogDescription>
+                Geben Sie die Song-Details ein, um ein Blatt mit KI zu
+                generieren.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="manual-title" className="text-right">
+                  Titel
+                </Label>
+                <Input
+                  id="manual-title"
+                  value={manualForm.title}
+                  onChange={(e) =>
+                    handleManualFormChange('title', e.target.value)
+                  }
+                  className="col-span-3"
+                  disabled={isGenerating}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="manual-artist" className="text-right">
+                  Interpret
+                </Label>
+                <Input
+                  id="manual-artist"
+                  value={manualForm.artist}
+                  onChange={(e) =>
+                    handleManualFormChange('artist', e.target.value)
+                  }
+                  className="col-span-3"
+                  disabled={isGenerating}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="manual-key" className="text-right">
+                  Tonart
+                </Label>
+                <Select
+                  value={manualForm.key}
+                  onValueChange={(value) => handleManualFormChange('key', value)}
+                  disabled={isGenerating}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Tonart auswählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>Dur</SelectLabel>
+                      {MAJOR_KEYS.map((key) => (
+                        <SelectItem key={key} value={key}>
+                          {key}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Moll</SelectLabel>
+                      {MINOR_KEYS.map((key) => (
+                        <SelectItem key={key} value={key}>
+                          {key}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-start gap-4">
+                <Label htmlFor="manual-lyrics" className="text-right pt-2">
+                  Songtext
+                </Label>
+                <Textarea
+                  id="manual-lyrics"
+                  value={manualForm.lyrics}
+                  onChange={(e) =>
+                    handleManualFormChange('lyrics', e.target.value)
+                  }
+                  className="col-span-3 min-h-[200px]"
+                  placeholder="Songtext hier einfügen..."
+                  disabled={isGenerating}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setManualAddDialogOpen(false)}
+                disabled={isGenerating}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                onClick={handleManualGenerateSheet}
+                disabled={isGenerating || !manualForm.lyrics}
               >
                 {isGenerating && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
