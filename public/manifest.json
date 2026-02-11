@@ -1,0 +1,16 @@
+{
+  "name": "SyncScroll",
+  "short_name": "SyncScroll",
+  "description": "Synchronisierte Song-Anzeige für Musiker.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030f2c",
+  "theme_color": "#6A45E5",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

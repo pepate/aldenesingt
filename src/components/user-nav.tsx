@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LogOut, Library, Shield, Pencil } from 'lucide-react';
+import { LogOut, Library, Shield, Pencil, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { signOut, updateProfile } from 'firebase/auth';
 import {
@@ -36,6 +36,7 @@ import { Skeleton } from './ui/skeleton';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { usePwaInstall } from '@/hooks/use-pwa-install';
 
 export function UserNav() {
   const { user } = useUser();
@@ -43,6 +44,7 @@ export function UserNav() {
   const { firestore } = useFirebase();
   const router = useRouter();
   const { toast } = useToast();
+  const { canInstall, promptInstall } = usePwaInstall();
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState('');
@@ -166,6 +168,13 @@ export function UserNav() {
               <Pencil className="mr-2 h-4 w-4" />
               <span>Profil bearbeiten</span>
             </DropdownMenuItem>
+
+            {canInstall && (
+              <DropdownMenuItem onClick={promptInstall}>
+                <Download className="mr-2 h-4 w-4" />
+                <span>App installieren</span>
+              </DropdownMenuItem>
+            )}
 
             {profileLoading ? (
               <Skeleton className="h-8 w-full rounded-sm" />
