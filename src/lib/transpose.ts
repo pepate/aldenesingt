@@ -40,10 +40,33 @@ const transposeNote = (note: string, amount: number): string => {
  * @returns The transposed chord string.
  */
 export const transposeChord = (chord: string, amount: number): string => {
-    // This regex finds all valid note names (A-G with optional # or b) that are not followed by a letter
-    // (to avoid matching things like 'A' in 'Am'). This is a simplification and might not cover all edge cases
-    // but is generally effective for root notes of chords.
-    return chord.replace(/[A-G](?:#|b)?/g, (match) => transposeNote(match, amount));
+    if (!chord || !chord.trim()) {
+        return chord;
+    }
+    // This regex captures the root note (A-G with optional # or b)
+    // and the rest of the chord string, including a potential bass note.
+    const match = chord.match(/^([A-G][#b]?)(.*)/);
+
+    if (!match) {
+        // Not a chord or a format we recognize, return it as is.
+        return chord;
+    }
+
+    const note = match[1];
+    const rest = match[2];
+
+    const transposedNote = transposeNote(note, amount);
+
+    // Now, handle the bass note if it exists (e.g., in "Am/G")
+    const parts = rest.split('/');
+    if (parts.length > 1) {
+        const quality = parts[0];
+        const bassNote = parts[1];
+        const transposedBass = transposeNote(bassNote, amount);
+        return transposedNote + quality + '/' + transposedBass;
+    }
+
+    return transposedNote + rest;
 };
 
 
@@ -76,7 +99,7 @@ export const transposeSongSheet = (sheet: SongSheet, amount: number): SongSheet 
         return { ...part, lines: newLines };
     });
 
-    const transposedKey = transposeChord(sheet.key, amount);
+    const transposedKey = transposeNote(sheet.key, amount);
 
     return { ...sheet, key: transposedKey, song: newSongParts };
 };
