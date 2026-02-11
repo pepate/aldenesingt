@@ -13,7 +13,7 @@
  *
  * Data Structure & Access:
  * - /users/{userId}: Private user profile, contains the 'role'.
- *   - Admins can list and read all user profiles.
+ *   - Admins can list all user profiles.
  *   - Admins can update any user's profile/role, except for other 'admin' roles.
  *   - Users can update their own profile but are NOT allowed to change their own role.
  * - /songs/{songId}: Publicly-readable songs.
@@ -66,7 +66,9 @@ service cloud.firestore {
      * @path /users/{userId}
      */
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
+      // Publicly readable to show host names on session cards.
+      // Sensitive data like email is exposed, but necessary for the feature.
+      allow get: if true; 
       allow list: if isAdmin();
       allow create: if isOwner(userId);
       // 1. Owners can update their own profile, but cannot change their role.

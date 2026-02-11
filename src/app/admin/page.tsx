@@ -57,7 +57,9 @@ function AdminPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [authStatus, setAuthStatus] = useState<
+    'loading' | 'authorized' | 'unauthorized'
+  >('loading');
 
   const currentUserProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -79,23 +81,27 @@ function AdminPage() {
   const authLoading = userLoading || profileLoading;
 
   useEffect(() => {
-    // This effect handles redirection and authorization state
+    // This effect now only determines the authorization status
     if (!authLoading) {
-      const hasPermission =
-        currentUserProfile && currentUserProfile.role === 'admin';
-
-      if (hasPermission) {
-        setIsAuthorized(true);
+      if (currentUserProfile && currentUserProfile.role === 'admin') {
+        setAuthStatus('authorized');
       } else {
-        toast({
-          variant: 'destructive',
-          title: 'Zugriff verweigert',
-          description: 'Sie haben keine Berechtigung für diese Seite.',
-        });
-        router.push('/');
+        setAuthStatus('unauthorized');
       }
     }
-  }, [authLoading, currentUserProfile, router, toast]);
+  }, [authLoading, currentUserProfile]);
+
+  useEffect(() => {
+    // This effect handles the side-effect of redirection
+    if (authStatus === 'unauthorized') {
+      toast({
+        variant: 'destructive',
+        title: 'Zugriff verweigert',
+        description: 'Sie haben keine Berechtigung für diese Seite.',
+      });
+      router.push('/');
+    }
+  }, [authStatus, router, toast]);
 
   useEffect(() => {
     if (fetchedUsers) {
@@ -144,7 +150,7 @@ function AdminPage() {
 
   // This shows a loader until we are certain the user is authorized.
   // This prevents the page content from flashing before redirection.
-  if (!isAuthorized) {
+  if (authStatus !== 'authorized') {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
