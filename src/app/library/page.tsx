@@ -288,7 +288,7 @@ function LibraryPage() {
       toast({
         variant: 'destructive',
         title: 'Fehlende Informationen',
-        description: 'Bitte füllen Sie alle Felder aus.',
+        description: 'Bitte fülle alle Felder aus.',
       });
       return;
     }
@@ -368,7 +368,7 @@ function LibraryPage() {
       toast({
         variant: 'destructive',
         title: 'Fehlende Informationen',
-        description: 'Bitte füllen Sie alle Felder aus.',
+        description: 'Bitte fülle alle Felder aus.',
       });
       return;
     }
@@ -480,7 +480,7 @@ function LibraryPage() {
         <LibraryIcon className="h-16 w-16 text-primary mb-4" />
         <h2 className="text-2xl font-bold">Zugriff verweigert</h2>
         <p className="text-muted-foreground mt-2 mb-6">
-          Sie müssen ein "Creator" oder "Admin" sein, um die Bibliothek zu
+          Du musst ein "Creator" oder "Admin" sein, um die Bibliothek zu
           sehen.
         </p>
         <Button onClick={() => router.push('/')}>
@@ -531,7 +531,7 @@ function LibraryPage() {
                   <DialogHeader>
                     <DialogTitle>Neue Session starten</DialogTitle>
                     <DialogDescription>
-                      Wählen Sie einen Song aus, um eine neue Live-Sitzung zu
+                      Wähle einen Song aus, um eine neue Live-Sitzung zu
                       starten.
                     </DialogDescription>
                   </DialogHeader>
@@ -543,7 +543,7 @@ function LibraryPage() {
                     ) : (
                       <Select onValueChange={setSelectedSongId}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Wählen Sie einen Song..." />
+                          <SelectValue placeholder="Wähle einen Song..." />
                         </SelectTrigger>
                         <SelectContent>
                           {songs?.map((song) => (
@@ -599,11 +599,10 @@ function LibraryPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Sparkles />
-                Neuen Song mit KI generieren
+                Neuen Song hinzufügen
               </CardTitle>
               <CardDescription>
-                Suchen Sie nach einem Song auf iTunes oder fügen Sie manuell
-                einen hinzu.
+                Suche nach einem Song oder füge ihn manuell hinzu.
                 {userProfile?.role === 'creator' &&
                   ` (${
                     5 -
@@ -617,7 +616,7 @@ function LibraryPage() {
             <CardContent>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="song-search">iTunes-Suche</Label>
+                  <Label htmlFor="song-search">Suche</Label>
                   <Input
                     id="song-search"
                     placeholder="z.B. Hotel California, Eagles"
@@ -705,7 +704,7 @@ function LibraryPage() {
             <DialogHeader>
               <DialogTitle>Song-Blatt generieren</DialogTitle>
               <DialogDescription>
-                Wählen Sie eine Tonart und bestätigen Sie den Text, um die
+                Wähle eine Tonart und bestätige den Text, um die
                 Akkorde zu generieren.
               </DialogDescription>
             </DialogHeader>
@@ -752,7 +751,7 @@ function LibraryPage() {
                     value={lyrics}
                     onChange={(e) => setLyrics(e.target.value)}
                     className="col-span-3 min-h-[200px]"
-                    placeholder="Songtext hier einfügen, falls er nicht automatisch gefunden wurde."
+                    placeholder="Füge den Songtext hier ein, falls er nicht automatisch gefunden wurde."
                   />
                 )}
               </div>
@@ -787,7 +786,7 @@ function LibraryPage() {
             <DialogHeader>
               <DialogTitle>Song manuell erstellen</DialogTitle>
               <DialogDescription>
-                Geben Sie die Song-Details ein, um ein Blatt mit KI zu
+                Gib die Song-Details ein, um ein Blatt mit KI zu
                 generieren.
               </DialogDescription>
             </DialogHeader>
@@ -928,8 +927,8 @@ function LibraryPage() {
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 {librarySearchQuery
-                  ? 'Ihre Suche ergab keine Treffer.'
-                  : 'Generieren Sie Ihren ersten Song, um zu beginnen.'}
+                  ? 'Deine Suche ergab keine Treffer.'
+                  : 'Generiere deinen ersten Song, um zu beginnen.'}
               </p>
             </div>
           )}
