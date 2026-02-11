@@ -284,12 +284,12 @@ function HomeComponent() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <header className="p-4 sm:p-6 flex justify-between items-center border-b">
-        <div className="flex items-center gap-3">
+      <header className="p-4 flex justify-between items-center border-b gap-4">
+        <div className="flex items-center gap-3 shrink-0">
           <Music className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">SyncScroll</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">SyncScroll</h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center flex-wrap justify-end gap-2">
           {canCreateSongs && (
             <Button variant="ghost" onClick={() => router.push('/library')}>
               <Library className="mr-2" />
