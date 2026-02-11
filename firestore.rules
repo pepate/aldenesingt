@@ -94,7 +94,10 @@ service cloud.firestore {
      */
     match /sessions/{sessionId} {
       allow get, list: if true;
-      allow create: if canCreateContent() && request.resource.data.hostId == request.auth.uid;
+      // A user can only create a session document where the ID matches their own user ID.
+      allow create: if canCreateContent()
+                    && request.resource.data.hostId == request.auth.uid
+                    && sessionId == request.auth.uid;
       allow update: if isSignedIn() && isHost(sessionId);
       allow delete: if isSignedIn() && (isHost(sessionId) || isAdmin());
     }

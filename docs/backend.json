@@ -129,7 +129,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "The unique identifier for the session."
+          "description": "The unique identifier for the session, matching the host's user ID."
         },
         "hostId": {
           "type": "string",
@@ -181,7 +181,7 @@
       "schema": {
         "$ref": "#/entities/Session"
       },
-      "description": "Contains data for a single collaborative session."
+      "description": "Contains data for a single collaborative session, where the document ID matches the host's user ID."
     }
   }
 }

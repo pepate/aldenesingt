@@ -93,8 +93,8 @@ function SessionPageContent() {
   }, []);
 
   const sessionId = Array.isArray(params.sessionId)
-    ? params.sessionId[0].toUpperCase()
-    : params.sessionId.toUpperCase();
+    ? params.sessionId[0]
+    : params.sessionId;
 
   useEffect(() => {
     // Ensure this runs only on the client and uses the custom domain

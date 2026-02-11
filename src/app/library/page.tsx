@@ -301,11 +301,11 @@ function LibraryPage() {
   const createSession = async (songId: string) => {
     if (!user || !firestore) return;
 
-    const sessionId = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const sessionId = user.uid; // Use user's UID as session ID
 
     try {
-      const sessionCollection = collection(firestore, 'sessions');
-      await setDoc(doc(sessionCollection, sessionId), {
+      const sessionRef = doc(firestore, 'sessions', sessionId);
+      await setDoc(sessionRef, {
         id: sessionId,
         hostId: user.uid,
         songId: songId,
