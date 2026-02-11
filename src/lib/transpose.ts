@@ -19,18 +19,29 @@ const getNoteIndex = (note: string): number => {
 };
 
 /**
- * Transposes a single musical note by a given number of semitones.
- * @param note The note to transpose.
+ * Transposes a single musical pitch (note or chord root) by a given number of semitones.
+ * It preserves the chord quality (e.g., 'm', '7', 'sus4').
+ * @param pitch The musical pitch to transpose (e.g., "C", "Am", "F#7"). It should NOT contain a bass note (e.g., "/G").
  * @param amount The number of semitones to shift (can be positive or negative).
- * @returns The transposed note.
+ * @returns The transposed pitch.
  */
-const transposeNote = (note: string, amount: number): string => {
-    const index = getNoteIndex(note);
-    if (index === -1) return note; // Not a transposable note
+const transposePitch = (pitch: string, amount: number): string => {
+    // Match the root note (A-G with optional # or b) and the rest of the chord/note name
+    const match = pitch.match(/^([A-G][#b]?)(.*)/);
+    if (!match) {
+        return pitch; // Not a chord or a format we recognize
+    }
+
+    const root = match[1];
+    const rest = match[2];
+
+    const index = getNoteIndex(root);
+    if (index === -1) return pitch; // Should not happen with the regex, but as a safeguard
 
     const newIndex = (index + amount + 12) % 12;
-    // Prefer sharp notation for simplicity, as it's more common for display.
-    return notesSharp[newIndex];
+    const newRoot = notesSharp[newIndex]; // Prefer sharp notation
+
+    return newRoot + rest;
 };
 
 /**
@@ -43,30 +54,17 @@ export const transposeChord = (chord: string, amount: number): string => {
     if (!chord || !chord.trim()) {
         return chord;
     }
-    // This regex captures the root note (A-G with optional # or b)
-    // and the rest of the chord string, including a potential bass note.
-    const match = chord.match(/^([A-G][#b]?)(.*)/);
 
-    if (!match) {
-        // Not a chord or a format we recognize, return it as is.
-        return chord;
-    }
-
-    const note = match[1];
-    const rest = match[2];
-
-    const transposedNote = transposeNote(note, amount);
-
-    // Now, handle the bass note if it exists (e.g., in "Am/G")
-    const parts = rest.split('/');
+    const parts = chord.split('/');
     if (parts.length > 1) {
-        const quality = parts[0];
+        const mainChord = parts[0];
         const bassNote = parts[1];
-        const transposedBass = transposeNote(bassNote, amount);
-        return transposedNote + quality + '/' + transposedBass;
+        const transposedMain = transposePitch(mainChord, amount);
+        const transposedBass = transposePitch(bassNote, amount);
+        return `${transposedMain}/${transposedBass}`;
     }
 
-    return transposedNote + rest;
+    return transposePitch(chord, amount);
 };
 
 
@@ -99,7 +97,7 @@ export const transposeSongSheet = (sheet: SongSheet, amount: number): SongSheet 
         return { ...part, lines: newLines };
     });
 
-    const transposedKey = transposeNote(sheet.key, amount);
+    const transposedKey = transposePitch(sheet.key, amount);
 
     return { ...sheet, key: transposedKey, song: newSongParts };
 };

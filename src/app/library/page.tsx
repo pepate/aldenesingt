@@ -64,7 +64,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -84,7 +86,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { generateSongSheet } from '@/ai/flows/generate-song-sheet-flow';
 
-const MUSIC_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const MAJOR_KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const MINOR_KEYS = ['Am', 'A#m', 'Bm', 'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m'];
 
 function LibraryPage() {
   const { user, loading: userLoading } = useUser();
@@ -560,9 +563,18 @@ function LibraryPage() {
                     <SelectValue placeholder="Tonart auswählen" />
                   </SelectTrigger>
                   <SelectContent>
-                    {MUSIC_KEYS.map(key => (
-                      <SelectItem key={key} value={key}>{key}</SelectItem>
-                    ))}
+                    <SelectGroup>
+                      <SelectLabel>Dur</SelectLabel>
+                      {MAJOR_KEYS.map(key => (
+                        <SelectItem key={key} value={key}>{key}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Moll</SelectLabel>
+                      {MINOR_KEYS.map(key => (
+                        <SelectItem key={key} value={key}>{key}</SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
               </div>
