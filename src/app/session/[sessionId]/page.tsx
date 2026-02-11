@@ -54,7 +54,7 @@ import {
   errorEmitter,
   FirestorePermissionError,
 } from '@/firebase';
-import type { Session, Song, SessionParticipant, SongSheet } from '@/lib/types';
+import type { Session, Song, SongSheet } from '@/lib/types';
 import {
   doc,
   updateDoc,
@@ -177,55 +177,6 @@ function SessionPageContent() {
       return () => clearTimeout(timer);
     }
   }, [sessionLoading]);
-
-  // Effect to join/leave session
-  useEffect(() => {
-    if (!user || !firestore || !sessionId || !session) return;
-
-    const participantRef = doc(
-      firestore,
-      'sessions',
-      sessionId,
-      'sessionParticipants',
-      user.uid
-    );
-    const participantData = {
-      userId: user.uid,
-      sessionId: sessionId,
-      joinedAt: serverTimestamp(),
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-      isAnonymous: user.isAnonymous,
-    };
-
-    setDoc(participantRef, participantData).catch(async (serverError) => {
-      if (serverError.code === 'permission-denied') {
-        const permissionError = new FirestorePermissionError({
-          path: participantRef.path,
-          operation: 'create',
-          requestResourceData: participantData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      } else {
-        console.error('Failed to join session:', serverError);
-      }
-    });
-
-    return () => {
-      deleteDoc(participantRef).catch(async (serverError) => {
-        if (serverError.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: participantRef.path,
-            operation: 'delete',
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        } else {
-          // This might fire benignly on page unload, so we don't show a toast.
-          console.error('Failed to leave session:', serverError);
-        }
-      });
-    };
-  }, [user, firestore, sessionId, session]);
 
   // Sync editedSheet when current song changes
   useEffect(() => {

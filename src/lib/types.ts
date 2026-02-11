@@ -36,16 +36,6 @@ export type Session = {
   lastActivity: any;
 };
 
-export type SessionParticipant = {
-  id: string;
-  userId: string;
-  sessionId: string;
-  joinedAt: any;
-  displayName: string | null;
-  photoURL: string | null;
-  isAnonymous: boolean;
-};
-
 export type UserProfile = {
   id: string;
   email: string | null;

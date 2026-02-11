@@ -159,44 +159,6 @@
         }
       },
       "required": ["id", "hostId", "songId", "scroll", "createdAt", "lastActivity"]
-    },
-    "SessionParticipant": {
-      "title": "Session Participant",
-      "description": "Represents a user who has joined a session.",
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "The unique identifier for the participant entry, usually the user's UID."
-        },
-        "userId": {
-          "type": "string",
-          "description": "The ID of the user who joined."
-        },
-        "sessionId": {
-          "type": "string",
-          "description": "The ID of the session they joined."
-        },
-        "displayName": {
-          "type": "string",
-          "description": "The display name of the user who joined."
-        },
-        "photoURL": {
-          "type": "string",
-          "format": "uri",
-          "description": "URL of the participant's profile picture."
-        },
-        "joinedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "The timestamp when the user joined the session."
-        },
-        "isAnonymous": {
-          "type": "boolean",
-          "description": "Whether the user is an anonymous user."
-        }
-      },
-      "required": ["id", "userId", "sessionId", "joinedAt"]
     }
   },
   "auth": {
@@ -220,12 +182,6 @@
         "$ref": "#/entities/Session"
       },
       "description": "Contains data for a single collaborative session."
-    },
-    "/sessions/{sessionId}/sessionParticipants/{sessionParticipantId}": {
-      "schema": {
-        "$ref": "#/entities/SessionParticipant"
-      },
-      "description": "A subcollection tracking users who have joined a session."
     }
   }
 }
