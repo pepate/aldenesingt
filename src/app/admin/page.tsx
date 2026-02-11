@@ -71,15 +71,37 @@ function AdminPage() {
   const isLoading = userLoading || profileLoading;
   const isAuthorized = !isLoading && currentUserProfile?.role === 'admin';
 
+  // Enhanced logging to debug the authorization flow
+  console.log('Auth Status Check:', {
+    userLoading,
+    profileLoading,
+    isLoading,
+    isAuthorized,
+    role: currentUserProfile?.role,
+    userExists: !!user,
+  });
+
   useEffect(() => {
-    // Only redirect if loading is finished and the user is not authorized.
-    if (!isLoading && !isAuthorized) {
+    // This effect now robustly handles redirection.
+    // It will NOT redirect until all loading is complete.
+    console.log('Authorization Effect Triggered:', { isLoading, isAuthorized });
+
+    if (isLoading) {
+      console.log('Still loading data, waiting for authorization decision...');
+      return; // Do nothing until all data is loaded
+    }
+
+    // Once loading is complete, make a final decision.
+    if (!isAuthorized) {
+      console.log('Redirecting: Loading complete and user is NOT authorized.');
       toast({
         variant: 'destructive',
         title: 'Zugriff verweigert',
         description: 'Sie haben keine Berechtigung für diese Seite.',
       });
       router.push('/');
+    } else {
+      console.log('Access Granted: Loading complete and user is authorized.');
     }
   }, [isLoading, isAuthorized, router, toast]);
 
@@ -126,13 +148,13 @@ function AdminPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  // Render a loading spinner until authorization is resolved.
-  // If not authorized, the useEffect will trigger a redirect.
-  // This prevents the page content from ever flashing for an unauthorized user.
+  // This is the primary guard. It shows a loader until a final authorization
+  // decision can be made. This prevents any content flash.
   if (isLoading || !isAuthorized) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
+        <span className="ml-4">Überprüfe Berechtigungen...</span>
       </div>
     );
   }
