@@ -1,14 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Shield,
-  Loader2,
-  Users,
-  UserCheck,
-  UserCog,
-} from 'lucide-react';
+import { Shield, Loader2, Users, UserCheck, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -56,9 +50,6 @@ function AdminPage() {
   const { firestore } = useFirebase();
   const router = useRouter();
   const { toast } = useToast();
-  const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
-  const [authStatus, setAuthStatus] =
-    useState<'loading' | 'authorized' | 'unauthorized'>('loading');
 
   const currentUserProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -77,41 +68,32 @@ function AdminPage() {
     error: usersError,
   } = useCollection<UserProfile>(usersRef);
 
-  useEffect(() => {
-    // We wait until both user and profile loading are complete.
-    if (userLoading || profileLoading) {
-      setAuthStatus('loading');
-      return;
-    }
-
-    // Once loading is finished, we determine the status.
-    if (currentUserProfile && currentUserProfile.role === 'admin') {
-      setAuthStatus('authorized');
-    } else {
-      setAuthStatus('unauthorized');
-    }
-  }, [userLoading, profileLoading, currentUserProfile]);
+  const isLoading = userLoading || profileLoading;
+  const isAuthorized = !isLoading && currentUserProfile?.role === 'admin';
 
   useEffect(() => {
-    if (authStatus === 'unauthorized') {
+    // Only redirect if loading is finished and the user is not authorized.
+    if (!isLoading && !isAuthorized) {
       toast({
         variant: 'destructive',
         title: 'Zugriff verweigert',
         description: 'Sie haben keine Berechtigung für diese Seite.',
       });
       router.push('/');
-    } else if (authStatus === 'authorized' && fetchedUsers) {
-      // Sort users only when authorized and data is available
-      const sorted = [...fetchedUsers].sort((a, b) => {
-        const dateA = a.createdAt?.toDate() || 0;
-        const dateB = b.createdAt?.toDate() || 0;
-        if (dateA > dateB) return -1;
-        if (dateA < dateB) return 1;
-        return 0;
-      });
-      setUserProfiles(sorted);
     }
-  }, [authStatus, fetchedUsers, router, toast]);
+  }, [isLoading, isAuthorized, router, toast]);
+
+  const userProfiles = useMemo(() => {
+    if (!fetchedUsers) return [];
+    return [...fetchedUsers].sort((a, b) => {
+      const dateA = a.createdAt?.toDate() || 0;
+      const dateB = b.createdAt?.toDate() || 0;
+      if (dateA > dateB) return -1;
+      if (dateA < dateB) return 1;
+      return 0;
+    });
+  }, [fetchedUsers]);
+
 
   const handleRoleChange = async (
     userId: string,
@@ -144,8 +126,10 @@ function AdminPage() {
     return name.charAt(0).toUpperCase();
   };
 
-  // Show a loader until authorization is definitively confirmed.
-  if (authStatus !== 'authorized') {
+  // Render a loading spinner until authorization is resolved.
+  // If not authorized, the useEffect will trigger a redirect.
+  // This prevents the page content from ever flashing for an unauthorized user.
+  if (isLoading || !isAuthorized) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin" />
@@ -153,6 +137,7 @@ function AdminPage() {
     );
   }
 
+  // At this point, we are sure the user is an authorized admin.
   return (
     <div className="min-h-screen bg-background">
       <header className="p-4 sm:p-6 flex justify-between items-center border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
