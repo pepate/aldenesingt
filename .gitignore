@@ -34,3 +34,16 @@ firebase-debug.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scripts folder (service account keys, import scripts, PDFs)
+/scripts/
+
+# Das Ding PDFs
+*.pdf
+
+# Firebase config (generated locally)
+firebase.json
+firestore.indexes.json
+
+# Claude memory
+.claude/

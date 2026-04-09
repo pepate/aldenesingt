@@ -21,6 +21,8 @@ import {
   Check,
   ZoomIn,
   ZoomOut,
+  FileText,
+  FileImage,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { cloneDeep } from 'lodash';
@@ -254,6 +256,12 @@ function SessionPageContent() {
     });
   };
 
+  const handleDisplayModeToggle = () => {
+    if (!sessionRef || !isHost || !session) return;
+    const next = session.displayMode === 'image' ? 'text' : 'image';
+    updateDoc(sessionRef, { displayMode: next, lastActivity: serverTimestamp() }).catch(console.error);
+  };
+
   const handleFontSizeChange = (amount: number) => {
     const newIndex = Math.max(
       0,
@@ -431,6 +439,21 @@ function SessionPageContent() {
                   </div>
                 )}
               </div>
+            )}
+
+            {isHost && (currentSong?.pageImageUrls?.length ?? 0) > 0 && !isEditing && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleDisplayModeToggle}
+                title={session?.displayMode === 'image' ? 'Text anzeigen' : 'Bild anzeigen'}
+              >
+                {session?.displayMode === 'image'
+                  ? <FileText className="h-4 w-4" />
+                  : <FileImage className="h-4 w-4" />
+                }
+              </Button>
             )}
 
             <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-muted-foreground">
@@ -658,6 +681,7 @@ function SessionPageContent() {
             onSheetChange={setEditedSheet}
             showChords={showChords}
             fontSize={FONT_SIZES[fontSizeIndex]}
+            displayMode={session.displayMode ?? 'text'}
           />
         )}
         {!currentSong && !currentSongLoading && (

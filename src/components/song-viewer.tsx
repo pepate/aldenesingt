@@ -35,6 +35,7 @@ interface SongViewerProps {
   onSheetChange: (sheet: SongSheet) => void;
   showChords: boolean;
   fontSize: string;
+  displayMode?: 'text' | 'image';
 }
 
 const DEBOUNCE_TIME = 200;
@@ -116,6 +117,7 @@ export default function SongViewer({
   onSheetChange,
   showChords,
   fontSize,
+  displayMode = 'text',
 }: SongViewerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isUpdatingByListener = useRef(false);
@@ -419,10 +421,12 @@ export default function SongViewer({
     );
   }
 
+  const showImages = displayMode === 'image' && (song.pageImageUrls?.length ?? 0) > 0;
+
   return (
     <div
       ref={scrollContainerRef}
-      className="h-full w-full overflow-y-auto bg-background p-4 sm:p-6 md:p-8"
+      className="h-full w-full overflow-y-auto bg-background"
       onScroll={handleScroll}
       style={{
         WebkitOverflowScrolling: 'touch',
@@ -430,43 +434,59 @@ export default function SongViewer({
         scrollbarColor: 'hsl(var(--primary)) hsl(var(--background))',
       }}
     >
-      <div className="max-w-2xl mx-auto">
-        {!sessionRef && (
-          <div className="mb-4">
-            <p>
-              <span className="font-bold">Erscheinungsdatum:</span>{' '}
-              {displaySheet.releaseDate}
-            </p>
-            <p>
-              <span className="font-bold">Genre:</span> {displaySheet.genre}
-            </p>
-            <p>
-              <span className="font-bold">Tonart:</span> {displaySheet.key}
-            </p>
-          </div>
-        )}
+      {showImages ? (
+        <div className="flex flex-col items-center gap-2 p-2">
+          {song.pageImageUrls!.map((url, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={i}
+              src={url}
+              alt={`${song.title} – Seite ${i + 1}`}
+              className="w-full max-w-3xl rounded shadow"
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="p-4 sm:p-6 md:p-8">
+          <div className="max-w-2xl mx-auto">
+            {!sessionRef && (
+              <div className="mb-4">
+                <p>
+                  <span className="font-bold">Erscheinungsdatum:</span>{' '}
+                  {displaySheet.releaseDate}
+                </p>
+                <p>
+                  <span className="font-bold">Genre:</span> {displaySheet.genre}
+                </p>
+                <p>
+                  <span className="font-bold">Tonart:</span> {displaySheet.key}
+                </p>
+              </div>
+            )}
 
-        {displaySheet.song.map((part, partIndex) => (
-          <div key={partIndex} className="mb-6">
-            <h3 className="font-bold text-lg mb-2 border-b pb-1">
-              {part.part}
-            </h3>
-            {part.lines.map((line, lineIndex) => (
-              <div
-                key={lineIndex}
-                className={cn('flex flex-col mb-1 font-code', fontSize)}
-              >
-                {showChords && line.chords && (
-                  <div className="text-accent font-bold whitespace-pre-wrap">
-                    {line.chords}
+            {displaySheet.song.map((part, partIndex) => (
+              <div key={partIndex} className="mb-6">
+                <h3 className="font-bold text-lg mb-2 border-b pb-1">
+                  {part.part}
+                </h3>
+                {part.lines.map((line, lineIndex) => (
+                  <div
+                    key={lineIndex}
+                    className={cn('flex flex-col mb-1 font-code', fontSize)}
+                  >
+                    {showChords && line.chords && (
+                      <div className="text-accent font-bold whitespace-pre-wrap">
+                        {line.chords}
+                      </div>
+                    )}
+                    <div className="whitespace-pre-wrap">{line.text}</div>
                   </div>
-                )}
-                <div className="whitespace-pre-wrap">{line.text}</div>
+                ))}
               </div>
             ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

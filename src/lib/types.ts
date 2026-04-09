@@ -24,6 +24,7 @@ export type Song = {
   artist: string;
   sheet: SongSheet;
   artworkUrl?: string;
+  pageImageUrls?: string[];
 };
 
 export type Session = {
@@ -33,6 +34,7 @@ export type Session = {
   hostId: string;
   hostName: string;
   transpose: number;
+  displayMode?: 'text' | 'image';
   createdAt: any;
   lastActivity: any;
 };

@@ -15,6 +15,8 @@ import {
   ZoomIn,
   ZoomOut,
   Trash2,
+  FileText,
+  FileImage,
 } from 'lucide-react';
 import { cloneDeep } from 'lodash';
 
@@ -63,6 +65,7 @@ function SongPageContent() {
   const [transpose, setTranspose] = useState(0);
   const [showChords, setShowChords] = useState(true);
   const [fontSizeIndex, setFontSizeIndex] = useState(2); // default to 'text-lg'
+  const [displayMode, setDisplayMode] = useState<'text' | 'image'>('text');
 
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -335,6 +338,20 @@ function SongPageContent() {
                 </div>
               </>
             )}
+            {!isEditing && (song?.pageImageUrls?.length ?? 0) > 0 && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setDisplayMode(m => m === 'image' ? 'text' : 'image')}
+                title={displayMode === 'image' ? 'Text anzeigen' : 'Bild anzeigen'}
+              >
+                {displayMode === 'image'
+                  ? <FileText className="h-4 w-4" />
+                  : <FileImage className="h-4 w-4" />
+                }
+              </Button>
+            )}
             {canDelete && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -382,6 +399,7 @@ function SongPageContent() {
             onSheetChange={setEditedSheet}
             showChords={showChords}
             fontSize={FONT_SIZES[fontSizeIndex]}
+            displayMode={displayMode}
           />
         )}
       </main>
