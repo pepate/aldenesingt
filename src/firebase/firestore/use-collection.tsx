@@ -42,14 +42,21 @@ export const useCollection = <T extends DocumentData>(query: Query | null) => {
         setError(err);
         setLoading(false);
         if (err.code === 'permission-denied' && query) {
-          // A CollectionReference has a path, but a general Query might not.
-          // This provides the path for context where possible.
           const path = (query as CollectionReference)?.path || 'Unbekannte Sammlung';
-          const permissionError = new FirestorePermissionError({
-            path: path,
-            operation: 'list',
-          });
-          errorEmitter.emit('permission-error', permissionError);
+          const topLevel = path.split('/')[0];
+          // Only surface permission errors for our own app collections.
+          // Firebase SDK internals (e.g. 'groups') trigger their own Firestore
+          // queries that we should not expose to the user as errors.
+          const knownCollections = ['songs', 'sessions', 'users'];
+          if (knownCollections.includes(topLevel)) {
+            const permissionError = new FirestorePermissionError({
+              path: path,
+              operation: 'list',
+            });
+            errorEmitter.emit('permission-error', permissionError);
+          } else {
+            console.warn(`Firestore permission denied for internal/unknown collection: ${path}`);
+          }
         } else {
             console.error(err);
         }
