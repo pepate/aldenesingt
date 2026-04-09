@@ -7,7 +7,7 @@ import React, {
   useMemo,
 } from 'react';
 import { FirebaseApp } from 'firebase/app';
-import { Auth, getAuth, onAuthStateChanged, User, signInAnonymously } from 'firebase/auth';
+import { Auth, getAuth, onAuthStateChanged, User } from 'firebase/auth';
 import {
   Firestore,
   getFirestore,
@@ -76,11 +76,9 @@ export function FirebaseClientProvider({
           setUser(user);
           setLoading(false);
         } else {
-           // No user. Sign in anonymously. The listener will re-run with the new user.
-           signInAnonymously(auth).catch(err => {
-              console.error("Anonymous sign-in failed", err);
-              setLoading(false); // Stop loading even if anon sign-in fails
-           });
+          // No user signed in — unauthenticated users can browse sessions.
+          setUser(null);
+          setLoading(false);
         }
       },
       (error) => {
