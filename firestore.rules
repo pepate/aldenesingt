@@ -1,33 +1,10 @@
 /**
  * Firestore Security Rules for Aldene Singt Application
  * Role-Based Access Control: Secure by Default
- *
- * Core Philosophy:
- * This ruleset implements a role-based access control (RBAC) system to manage user permissions.
- * It now supports anonymous users for viewing and joining sessions.
- *
- * Roles:
- * - 'user': Can view/join sessions. Can "upgrade" to a permanent account. Can create sessions.
- * - 'creator': Can do everything a 'user' can, plus generate a limited number of new songs per day.
- * - 'admin': Has full access, including the ability to manage user roles and create sessions.
- *
- * Data Structure & Access:
- * - /users/{userId}: Private user profile, contains the 'role'.
- *   - Admins can list all user profiles.
- *   - Admins can update any user's profile/role, except for other 'admin' roles.
- *   - Users can update their own profile but are NOT allowed to change their own role.
- * - /songs/{songId}: Publicly-readable songs.
- *   - Reading is allowed by everyone (including anonymous).
- *   - Creating songs is restricted to 'creator' and 'admin' roles.
- * - /sessions/{sessionId}: Collaborative sessions.
- *   - Reading and listing is public for all users (including anonymous).
- *   - Session creation is restricted to 'creator' and 'admin' roles.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper Functions for reusable logic
 
     function isSignedIn() {
       return request.auth != null;
@@ -42,76 +19,93 @@ service cloud.firestore {
     }
 
     function isRole(role) {
-        return isSignedIn() && getUserData(request.auth.uid).role == role;
+      return isSignedIn() && getUserData(request.auth.uid).role == role;
     }
 
     function isAdmin() {
-        return isRole('admin');
+      return isRole('admin');
     }
 
     function isCreator() {
-        return isRole('creator');
+      return isRole('creator');
     }
 
     function canCreateContent() {
-        return isCreator() || isAdmin();
+      return isCreator() || isAdmin();
     }
 
     function isHost(sessionId) {
       return get(/databases/$(database)/documents/sessions/$(sessionId)).data.hostId == request.auth.uid;
     }
 
-    /**
-     * @description Manages user profile documents.
-     * @path /users/{userId}
-     */
     match /users/{userId} {
-      // Allow reading a profile only if you are the owner or an admin.
-      // Public data like displayName is denormalized into other documents (e.g., sessions).
       allow get: if isOwner(userId) || isAdmin();
-
-      // Allow admins to list all user profiles.
       allow list: if isAdmin();
-
-      // Allow users to create their own profile document.
       allow create: if isOwner(userId);
-
-      // 1. Owners can update their own profile, but cannot change their role.
-      // 2. Admins can update any user's profile, but not another admin's profile.
       allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role)
                     || (isAdmin() && resource.data.role != 'admin');
-
-      // Allow owners or admins to delete profiles.
       allow delete: if isAdmin() || isOwner(userId);
     }
 
-    /**
-     * @description Manages the public library of songs.
-     * @path /songs/{songId}
-     */
     match /songs/{songId} {
-        allow read: if true;
-        allow create: if canCreateContent() && request.resource.data.userId == request.auth.uid;
-        allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-        allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if true;
+      allow create: if canCreateContent() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Song version history subcollection
+      match /versions/{versionId} {
+        allow read: if isSignedIn()
+                    && (get(/databases/$(database)/documents/songs/$(songId)).data.userId == request.auth.uid
+                        || isAdmin());
+        allow create: if isSignedIn()
+                      && (get(/databases/$(database)/documents/songs/$(songId)).data.userId == request.auth.uid
+                          || isAdmin());
+        allow delete: if isAdmin();
+      }
     }
 
-    /**
-     * @description Manages collaborative viewing sessions.
-     * @path /sessions/{sessionId}
-     */
     match /sessions/{sessionId} {
       allow get, list: if true;
-      // Any signed-in user can create a session, but the session ID must match their own UID.
       allow create: if isSignedIn()
                     && request.resource.data.hostId == request.auth.uid
                     && sessionId == request.auth.uid;
-
-      // Allow the host, an admin, or a creator to update the session.
       allow update: if isSignedIn() && (isHost(sessionId) || isAdmin() || isCreator());
-
-      // Allow the host or an admin to delete the session.
       allow delete: if isSignedIn() && (isHost(sessionId) || isAdmin());
+
+      // Who's in the session
+      match /presence/{userId} {
+        allow read: if true;
+        allow write: if isSignedIn() && isOwner(userId);
+      }
+
+      // Emoji reactions
+      match /reactions/{reactionId} {
+        allow read: if true;
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow delete: if isSignedIn()
+                      && (resource.data.userId == request.auth.uid || isHost(sessionId));
+      }
+    }
+
+    // Tags: creator/admin can create; owner can update/delete; all can read
+    match /tags/{tagId} {
+      allow read: if true;
+      allow create: if canCreateContent() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Setlists: owner full control; public setlists readable by all
+    match /setlists/{setlistId} {
+      allow get: if resource.data.isPublic == true
+                 || (isSignedIn() && resource.data.userId == request.auth.uid)
+                 || isAdmin();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn()
+                    && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn()
+                    && (resource.data.userId == request.auth.uid || isAdmin());
     }
   }
 }

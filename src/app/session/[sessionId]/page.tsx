@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense, useMemo } from 'react';
+import { useEffect, useState, useRef, Suspense, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -23,13 +23,18 @@ import {
   ZoomOut,
   FileText,
   FileImage,
+  ListMusic,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { cloneDeep } from 'lodash';
+import { useDrag } from '@use-gesture/react';
 
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import SongViewer from '@/components/song-viewer';
+import PresenceBubbles from '@/components/presence-bubbles';
+import SongQueuePanel from '@/components/song-queue-panel';
+import ReactionBar from '@/components/reaction-bar';
 import {
   Popover,
   PopoverContent,
@@ -63,7 +68,10 @@ import {
   collection,
   setDoc,
   deleteDoc,
+  addDoc,
+  arrayUnion,
   serverTimestamp,
+  increment,
 } from 'firebase/firestore';
 import { UserNav } from '@/components/user-nav';
 import Image from 'next/image';
@@ -86,6 +94,12 @@ function SessionPageContent() {
   const [songSelectorOpen, setSongSelectorOpen] = useState(false);
   const [songSearch, setSongSearch] = useState('');
   const [fontSizeIndex, setFontSizeIndex] = useState(2); // default to 'text-lg'
+  const [queuePanelOpen, setQueuePanelOpen] = useState(false);
+
+  // Presence heartbeat ref
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Track whether we've already written recentlyPlayed for the current song
+  const recentlyPlayedSongIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const savedSizeIndex = localStorage.getItem('song-viewer-font-size-index');
@@ -102,7 +116,7 @@ function SessionPageContent() {
     // Ensure this runs only on the client and uses the custom domain
     setSessionUrl(`https://aldene.de/session/${sessionId}`);
   }, [sessionId]);
-  
+
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
     [firestore, user]
@@ -160,6 +174,106 @@ function SessionPageContent() {
   );
   const { data: currentSong, loading: currentSongLoading } =
     useDoc<Song>(currentSongRef);
+
+  // ── Presence ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!firestore || !user || !sessionId) return;
+
+    const presenceDocRef = doc(
+      firestore,
+      'sessions',
+      sessionId,
+      'presence',
+      user.uid
+    );
+
+    const presenceData = {
+      userId: user.uid,
+      displayName: user.displayName ?? user.email ?? 'Unbekannt',
+      photoURL: user.photoURL ?? null,
+      joinedAt: serverTimestamp(),
+      lastSeen: serverTimestamp(),
+    };
+
+    setDoc(presenceDocRef, presenceData).catch(() => {
+      // Silently ignore permission errors on presence writes
+    });
+
+    heartbeatRef.current = setInterval(() => {
+      setDoc(
+        presenceDocRef,
+        { lastSeen: serverTimestamp() },
+        { merge: true }
+      ).catch(() => {});
+    }, 20_000);
+
+    return () => {
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      deleteDoc(presenceDocRef).catch(() => {});
+    };
+  }, [firestore, user, sessionId]);
+
+  // ── Recently Played ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentSong || !user || !firestore) return;
+    if (recentlyPlayedSongIdRef.current === currentSong.id) return;
+
+    recentlyPlayedSongIdRef.current = currentSong.id;
+
+    const userDocRef = doc(firestore, 'users', user.uid);
+    // serverTimestamp() cannot be nested inside arrayUnion — use a plain Date
+    const newEntry = {
+      songId: currentSong.id,
+      title: currentSong.title,
+      artist: currentSong.artist,
+      artworkUrl: currentSong.artworkUrl ?? null,
+      openedAt: new Date(),
+    };
+
+    // First write arrayUnion entry
+    updateDoc(userDocRef, {
+      recentlyPlayed: arrayUnion(newEntry),
+    })
+      .then(async () => {
+        // Then read back to trim to last 10
+        const { getDoc } = await import('firebase/firestore');
+        const snap = await getDoc(userDocRef);
+        const data = snap.data();
+        if (!data?.recentlyPlayed) return;
+
+        const plays: any[] = data.recentlyPlayed;
+        if (plays.length <= 10) return;
+
+        // Sort by openedAt descending and keep newest 10
+        const sorted = [...plays].sort((a, b) => {
+          const aMs = a.openedAt?.seconds ?? 0;
+          const bMs = b.openedAt?.seconds ?? 0;
+          return bMs - aMs;
+        });
+        const trimmed = sorted.slice(0, 10);
+
+        await updateDoc(userDocRef, { recentlyPlayed: trimmed });
+      })
+      .catch(() => {
+        // Silently ignore
+      });
+  }, [currentSong, user, firestore]);
+
+  // ── Play Count (host only, only when host has write permission on the song) ──
+  const playCountSongIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentSong || !firestore || !isHost || !user) return;
+    // Only increment if we own the song or are admin — avoids a permission-denied
+    // write that can corrupt the Firestore SDK's internal mutation queue.
+    const canUpdate =
+      currentSong.userId === user.uid || userProfile?.role === 'admin';
+    if (!canUpdate) return;
+    if (playCountSongIdRef.current === currentSong.id) return;
+    playCountSongIdRef.current = currentSong.id;
+    updateDoc(doc(firestore, 'songs', currentSong.id), {
+      playCount: increment(1),
+    }).catch(() => {});
+  }, [currentSong, firestore, isHost, user, userProfile]);
 
   // Effect to handle session errors (like permissions)
   useEffect(() => {
@@ -224,6 +338,45 @@ function SessionPageContent() {
         variant: 'destructive',
         title: 'Fehler',
         description: 'Konnte den Song nicht wechseln.',
+      });
+    }
+  };
+
+  // ── Queue handlers ─────────────────────────────────────────────────────────
+  const handleQueueChange = async (newQueue: string[]) => {
+    if (!sessionRef || !isHost) return;
+    try {
+      await updateDoc(sessionRef, { queue: newQueue, lastActivity: serverTimestamp() });
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: 'Fehler',
+        description: 'Warteschlange konnte nicht aktualisiert werden.',
+      });
+    }
+  };
+
+  const handleNextInQueue = async () => {
+    if (!sessionRef || !isHost || !session?.queue?.length) return;
+    const [nextSongId, ...remainingQueue] = session.queue;
+    try {
+      await updateDoc(sessionRef, {
+        songId: nextSongId,
+        queue: remainingQueue,
+        scroll: 0,
+        transpose: 0,
+        lastActivity: serverTimestamp(),
+      });
+      const nextSong = allSongs?.find((s) => s.id === nextSongId);
+      toast({
+        title: 'Nächster Song',
+        description: nextSong ? `${nextSong.title}` : 'Song gewechselt',
+      });
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: 'Fehler',
+        description: 'Konnte nicht zum nächsten Song wechseln.',
       });
     }
   };
@@ -308,6 +461,20 @@ function SessionPageContent() {
     }
   };
 
+  // ── Swipe gesture (host only) ──────────────────────────────────────────────
+  const mainRef = useRef<HTMLDivElement>(null);
+
+  const bind = useDrag(
+    ({ last, movement: [dx] }) => {
+      if (!last) return;
+      if (!isHost || !session?.queue?.length) return;
+      if (dx < -80) {
+        handleNextInQueue();
+      }
+    },
+    { filterTaps: true, threshold: 10 }
+  );
+
   const showLoading =
     sessionLoading ||
     userProfileLoading ||
@@ -348,6 +515,9 @@ function SessionPageContent() {
             </Link>
           </Button>
           <div className="flex items-center justify-end flex-wrap gap-x-2 sm:gap-x-4 gap-y-2">
+            {/* Presence Bubbles */}
+            <PresenceBubbles sessionId={sessionId} />
+
             <div className="flex items-center gap-1.5">
               <Switch
                 id="show-chords"
@@ -453,6 +623,19 @@ function SessionPageContent() {
                   ? <FileText className="h-4 w-4" />
                   : <FileImage className="h-4 w-4" />
                 }
+              </Button>
+            )}
+
+            {/* Queue button (host only) */}
+            {isHost && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setQueuePanelOpen(true)}
+                title="Song-Warteschlange"
+              >
+                <ListMusic className="h-4 w-4" />
               </Button>
             )}
 
@@ -640,7 +823,7 @@ function SessionPageContent() {
             )}
           </div>
         </div>
-        
+
         {/* Bottom Row: Mobile-only font size controls */}
         {!isEditing && (
             <div className="md:hidden flex items-center gap-1 rounded-md bg-muted p-1 self-center">
@@ -666,7 +849,13 @@ function SessionPageContent() {
             </div>
         )}
       </header>
-      <main className="flex-1 overflow-hidden">
+
+      {/* Main content with swipe gesture for host */}
+      <main
+        ref={mainRef}
+        className="flex-1 overflow-hidden"
+        {...(isHost && session?.queue?.length ? bind() : {})}
+      >
         {currentSong && sessionRef && session && editedSheet && (
           <SongViewer
             key={currentSong.id} // Re-mount when song changes
@@ -701,6 +890,25 @@ function SessionPageContent() {
           </div>
         )}
       </main>
+
+      {/* Song Queue Panel (host only) */}
+      {isHost && (
+        <SongQueuePanel
+          open={queuePanelOpen}
+          onOpenChange={setQueuePanelOpen}
+          queue={session.queue ?? []}
+          allSongs={allSongs ?? []}
+          onQueueChange={handleQueueChange}
+          onNext={handleNextInQueue}
+        />
+      )}
+
+      {/* Reaction Bar */}
+      <ReactionBar
+        sessionId={sessionId}
+        isHost={isHost}
+        userId={user?.uid}
+      />
     </div>
   );
 }

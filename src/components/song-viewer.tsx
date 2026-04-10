@@ -19,7 +19,8 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import { Button } from './ui/button';
-import { ArrowLeftFromLine, CornerDownLeft } from 'lucide-react';
+import { Badge } from './ui/badge';
+import { ArrowLeftFromLine, CornerDownLeft, Music2, Timer } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
@@ -36,9 +37,26 @@ interface SongViewerProps {
   showChords: boolean;
   fontSize: string;
   displayMode?: 'text' | 'image';
+  showCapoBpm?: boolean;
 }
 
 const DEBOUNCE_TIME = 200;
+
+const SECTION_COLORS: Record<string, string> = {
+  Verse: '#3b82f6',
+  Strophe: '#3b82f6',
+  Chorus: '#a855f7',
+  Refrain: '#a855f7',
+  Bridge: '#f97316',
+  Intro: '#22c55e',
+  Outro: '#22c55e',
+  Solo: '#ef4444',
+};
+
+export function getSectionColor(sectionLabel?: string): string {
+  if (!sectionLabel) return 'transparent';
+  return SECTION_COLORS[sectionLabel] ?? 'transparent';
+}
 
 // Chord Helper Component for mobile editing
 const ChordHelper = ({ onInsert }: { onInsert: (text: string) => void }) => {
@@ -118,6 +136,7 @@ export default function SongViewer({
   showChords,
   fontSize,
   displayMode = 'text',
+  showCapoBpm = true,
 }: SongViewerProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isUpdatingByListener = useRef(false);
@@ -351,8 +370,19 @@ export default function SongViewer({
             <TabsList className="mb-4">
               {uniqueParts.map(({ part }) => {
                 const basePartName = part.part.replace(/\s+\d+$/, '').trim();
+                const sectionColor = getSectionColor(part.sectionLabel);
                 return (
-                  <TabsTrigger key={basePartName} value={basePartName}>
+                  <TabsTrigger
+                    key={basePartName}
+                    value={basePartName}
+                    className="flex items-center gap-1.5"
+                  >
+                    {sectionColor !== 'transparent' && (
+                      <span
+                        className="inline-block h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: sectionColor }}
+                      />
+                    )}
                     {basePartName}
                   </TabsTrigger>
                 );
@@ -464,26 +494,52 @@ export default function SongViewer({
               </div>
             )}
 
-            {displaySheet.song.map((part, partIndex) => (
-              <div key={partIndex} className="mb-6">
-                <h3 className="font-bold text-lg mb-2 border-b pb-1">
-                  {part.part}
-                </h3>
-                {part.lines.map((line, lineIndex) => (
-                  <div
-                    key={lineIndex}
-                    className={cn('flex flex-col mb-1 font-code', fontSize)}
-                  >
-                    {showChords && line.chords && (
-                      <div className="text-accent font-bold whitespace-pre-wrap">
-                        {line.chords}
-                      </div>
-                    )}
-                    <div className="whitespace-pre-wrap">{line.text}</div>
-                  </div>
-                ))}
+            {showCapoBpm && (song.capo != null || song.bpm != null) && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {song.capo != null && song.capo > 0 && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <Music2 className="h-3 w-3" />
+                    Capo {song.capo}
+                  </Badge>
+                )}
+                {song.bpm != null && song.bpm > 0 && (
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <Timer className="h-3 w-3" />
+                    {song.bpm} BPM
+                  </Badge>
+                )}
               </div>
-            ))}
+            )}
+
+            {displaySheet.song.map((part, partIndex) => {
+              const sectionColor = getSectionColor(part.sectionLabel);
+              return (
+                <div
+                  key={partIndex}
+                  className="mb-6 pl-3"
+                  style={{
+                    borderLeft: `4px solid ${sectionColor}`,
+                  }}
+                >
+                  <h3 className="font-bold text-lg mb-2 border-b pb-1">
+                    {part.part}
+                  </h3>
+                  {part.lines.map((line, lineIndex) => (
+                    <div
+                      key={lineIndex}
+                      className={cn('flex flex-col mb-1 font-code', fontSize)}
+                    >
+                      {showChords && line.chords && (
+                        <div className="text-accent font-bold whitespace-pre-wrap">
+                          {line.chords}
+                        </div>
+                      )}
+                      <div className="whitespace-pre-wrap">{line.text}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

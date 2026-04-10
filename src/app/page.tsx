@@ -10,6 +10,8 @@ import {
   Trash2,
   Share2,
   Crown,
+  Clock,
+  Radio,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +35,7 @@ import type {
   Session,
   Song,
   UserProfile,
+  RecentPlay,
 } from '@/lib/types';
 import {
   collection,
@@ -114,7 +117,7 @@ function SessionCard({
 
   return (
     <Card
-      className="flex flex-col group relative overflow-hidden cursor-pointer"
+      className="flex flex-col group relative overflow-hidden cursor-pointer card-hover border-border/60"
       onClick={handleJoin}
     >
       {hasArtwork && (
@@ -129,6 +132,11 @@ function SessionCard({
             <div className="absolute inset-0 bg-gradient-to-l from-transparent via-background/50 to-background" />
         </div>
       )}
+      {/* Live indicator */}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-red-500/90 text-white text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 z-10">
+        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+        Live
+      </div>
       <CardHeader className="relative flex-grow">
         <div>
             {songLoading ? (
@@ -138,7 +146,7 @@ function SessionCard({
               </>
             ) : (
               <>
-                <CardTitle className="truncate leading-tight text-lg">
+                <CardTitle className="truncate leading-tight text-lg pr-12">
                   {song?.title || 'Unbekannter Song'}
                 </CardTitle>
                 <CardDescription className="mt-1">
@@ -157,7 +165,7 @@ function SessionCard({
         </div>
       </CardContent>
       <CardFooter className="flex justify-between items-center gap-2 relative">
-        <Button className="w-full">
+        <Button className="w-full bg-gradient-to-r from-primary to-violet-500 hover:from-primary/90 hover:to-violet-500/90">
           <LogIn className="mr-2" />
           Beitreten
         </Button>
@@ -191,6 +199,57 @@ function SessionCard({
         )}
       </CardFooter>
     </Card>
+  );
+}
+
+function RecentlyPlayedRow({ recentlyPlayed }: { recentlyPlayed: RecentPlay[] }) {
+  const router = useRouter();
+
+  if (!recentlyPlayed.length) return null;
+
+  // Show most recently played first, max 10
+  const items = [...recentlyPlayed]
+    .sort((a, b) => {
+      const aMs = a.openedAt?.toMillis?.() ?? 0;
+      const bMs = b.openedAt?.toMillis?.() ?? 0;
+      return bMs - aMs;
+    })
+    .slice(0, 10);
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2 mb-3">
+        <Clock className="h-5 w-5 text-muted-foreground" />
+        <h2 className="text-xl font-semibold">Zuletzt gespielt</h2>
+      </div>
+      <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin">
+        {items.map((play) => (
+          <button
+            key={play.songId}
+            onClick={() => router.push(`/library/${play.songId}`)}
+            className="flex-shrink-0 w-36 group text-left"
+          >
+            <div className="relative w-36 h-36 rounded-xl overflow-hidden bg-muted mb-2 shadow-sm group-hover:shadow-md transition-shadow">
+              {play.artworkUrl ? (
+                <Image
+                  src={play.artworkUrl}
+                  alt={play.title}
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-300"
+                  sizes="144px"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-violet-500/20">
+                  <Music className="h-10 w-10 text-primary/60" />
+                </div>
+              )}
+            </div>
+            <p className="text-sm font-medium truncate">{play.title}</p>
+            <p className="text-xs text-muted-foreground truncate">{play.artist}</p>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -280,17 +339,23 @@ function HomeComponent() {
     }
   };
 
+  const recentlyPlayed = userProfile?.recentlyPlayed ?? [];
+  const showRecentlyPlayed = !!user && recentlyPlayed.length > 0;
+  const hasSessions = !loading && sessions && sessions.length > 0;
+
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <header className="p-4 flex justify-between items-center border-b gap-4">
+      <header className="p-4 flex justify-between items-center border-b gap-4 bg-card/60 backdrop-blur-sm sticky top-0 z-20">
         <div className="flex items-center gap-3 shrink-0">
-          <Music className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Aldene Singt</h1>
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-sm">
+            <Music className="h-5 w-5 text-white" />
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold gradient-text">Aldene Singt</h1>
         </div>
         <div className="flex items-center flex-wrap justify-end gap-2">
           {canCreateSongs && (
             <Button variant="ghost" onClick={() => router.push('/library')}>
-              <Library className="mr-2" />
+              <Library className="mr-2 h-4 w-4" />
               Songs
             </Button>
           )}
@@ -307,7 +372,7 @@ function HomeComponent() {
                   onOpenChange={setIsSessionDialogOpen}
                 >
                   <DialogTrigger asChild>
-                    <Button>
+                    <Button className="bg-gradient-to-r from-primary to-violet-500 hover:from-primary/90 hover:to-violet-500/90">
                       <Share2 className="mr-2 h-4 w-4" /> Session starten
                     </Button>
                   </DialogTrigger>
@@ -369,6 +434,7 @@ function HomeComponent() {
                       <Button
                         onClick={handleStartSession}
                         disabled={!selectedSongId || songsLoading}
+                        className="bg-gradient-to-r from-primary to-violet-500 hover:from-primary/90 hover:to-violet-500/90"
                       >
                         Session jetzt starten
                       </Button>
@@ -391,10 +457,34 @@ function HomeComponent() {
       </header>
 
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
+        {/* Hero section – shown when no sessions are active */}
+        {!loading && !hasSessions && !showRecentlyPlayed && (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="relative mb-6">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-lg glow-primary">
+                <Music className="h-10 w-10 text-white" />
+              </div>
+              <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-br from-cyan-400 to-cyan-500 flex items-center justify-center">
+                <Radio className="h-2.5 w-2.5 text-white" />
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold mb-2 gradient-text">Willkommen!</h2>
+            <p className="text-muted-foreground max-w-sm mb-8 leading-relaxed">
+              Momentan gibt es keine aktiven Sessions. Starte eine, um Songblätter live mit anderen zu teilen.
+            </p>
+            {!user && (
+              <Button onClick={() => router.push('/auth')} size="lg" className="bg-gradient-to-r from-primary to-violet-500 hover:from-primary/90 hover:to-violet-500/90">
+                <LogIn className="mr-2" />
+                Anmelden & loslegen
+              </Button>
+            )}
+          </div>
+        )}
+
         {loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[...Array(4)].map((_, i) => (
-              <Card key={i}>
+              <Card key={i} className="border-border/60">
                 <CardHeader>
                   <div className="h-5 w-3/4 bg-muted rounded animate-pulse mb-2" />
                   <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
@@ -410,32 +500,39 @@ function HomeComponent() {
           </div>
         )}
 
-        {!loading && sessions && sessions.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {sessions.map((session) => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                userProfile={userProfile}
-              />
-            ))}
+        {hasSessions && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <h2 className="text-xl font-semibold">Aktive Sessions</h2>
+              <span className="text-sm text-muted-foreground">({sessions!.length})</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {sessions!.map((session) => (
+                <SessionCard
+                  key={session.id}
+                  session={session}
+                  userProfile={userProfile}
+                />
+              ))}
+            </div>
           </div>
         )}
 
-        {!loading && (!sessions || sessions.length === 0) && (
-          <div className="text-center py-16 border-2 border-dashed rounded-lg">
-            <Music className="mx-auto h-12 w-12 text-muted-foreground" />
-            <h3 className="mt-4 text-lg font-medium text-muted-foreground">
-              Keine aktiven Sitzungen
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Momentan finden keine Sitzungen statt. Schauen Sie später noch
-              einmal vorbei!
-            </p>
+        {/* Recently played */}
+        {!loading && showRecentlyPlayed && (
+          <RecentlyPlayedRow recentlyPlayed={recentlyPlayed} />
+        )}
+
+        {/* Empty state when logged in but no sessions */}
+        {!loading && hasSessions === false && showRecentlyPlayed && (
+          <div className="text-center py-10 border-2 border-dashed rounded-xl mb-8 border-border/60">
+            <Radio className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
+            <p className="text-muted-foreground text-sm">Keine aktiven Sessions – starte eine oben!</p>
           </div>
         )}
       </main>
-      <footer className="p-4 text-center text-sm text-muted-foreground">
+      <footer className="p-4 text-center text-sm text-muted-foreground border-t">
         <p>
           &copy; {new Date().getFullYear()} Aldene Singt. Alle Rechte
           vorbehalten.

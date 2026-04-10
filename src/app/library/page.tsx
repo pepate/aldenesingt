@@ -10,6 +10,13 @@ import {
   Library as LibraryIcon,
   Sparkles,
   User,
+  Star,
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  Tag as TagIcon,
+  ListMusic,
+  PlusCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,8 +44,13 @@ import {
   doc,
   setDoc,
   updateDoc,
+  arrayUnion,
+  arrayRemove,
+  query,
+  where,
+  orderBy,
 } from 'firebase/firestore';
-import type { Song, SongSheet, UserProfile, Session } from '@/lib/types';
+import type { Song, UserProfile, Session, SongTag, Setlist } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -48,6 +60,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Select,
   SelectContent,
@@ -62,44 +84,69 @@ import { UserNav } from '@/components/user-nav';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { generateSongSheet } from '@/ai/flows/generate-song-sheet-flow';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from '@/components/ui/collapsible';
+import { TagManager, TagPills } from '@/components/tag-manager';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const MAJOR_KEYS = [
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
+  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
 ];
 const MINOR_KEYS = [
-  'Am',
-  'A#m',
-  'Bm',
-  'Cm',
-  'C#m',
-  'Dm',
-  'D#m',
-  'Em',
-  'Fm',
-  'F#m',
-  'Gm',
-  'G#m',
+  'Am', 'A#m', 'Bm', 'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m',
 ];
 
-function SongCard({ song }: { song: Song }) {
+function isMissingChords(song: Song): boolean {
+  if (!song.sheet?.song?.length) return true;
+  return song.sheet.song.every((part) =>
+    part.lines.every((line) => !line.chords || line.chords.trim() === '')
+  );
+}
+
+interface SongCardProps {
+  song: Song;
+  isFavourite: boolean;
+  onToggleFavourite: (songId: string, isFav: boolean) => void;
+  allTags: SongTag[];
+  firestore: any;
+  userId: string;
+  missingChords: boolean;
+  userSetlists: Setlist[];
+  onAddToSetlist: (songId: string, setlistId: string) => void;
+}
+
+function SongCard({
+  song,
+  isFavourite,
+  onToggleFavourite,
+  allTags,
+  firestore,
+  userId,
+  missingChords,
+  userSetlists,
+  onAddToSetlist,
+}: SongCardProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const hasArtwork = !!song.artworkUrl;
+  const songTagIds = song.tags ?? [];
+  const assignedTags = allTags.filter((t) => songTagIds.includes(t.id));
+  const [setlistPopoverOpen, setSetlistPopoverOpen] = useState(false);
 
   return (
     <Card
       onClick={() => router.push(`/library/${song.id}`)}
-      className="flex flex-col group relative overflow-hidden cursor-pointer"
+      className="flex flex-col group relative overflow-hidden cursor-pointer card-hover border-border/60"
     >
       {hasArtwork && (
         <div className="absolute top-0 right-0 h-full w-1/2 opacity-40 group-hover:opacity-60 transition-opacity duration-300">
@@ -113,25 +160,98 @@ function SongCard({ song }: { song: Song }) {
           <div className="absolute inset-0 bg-gradient-to-l from-transparent via-background/50 to-background" />
         </div>
       )}
-      <CardHeader className="relative flex-grow">
-        <div>
-          <CardTitle className="truncate leading-tight text-lg">
-            {song.title || 'Unbekannter Song'}
-          </CardTitle>
-          <CardDescription className="mt-1">
-            {song.artist || ' '}
-          </CardDescription>
+      <CardHeader className="relative flex-grow pb-2">
+        <div className="flex items-start justify-between gap-1">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="truncate leading-tight text-lg">
+              {song.title || 'Unbekannter Song'}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              {song.artist || ' '}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-0.5 shrink-0">
+            {userSetlists.length > 0 && (
+              <Popover open={setlistPopoverOpen} onOpenChange={setSetlistPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    className="p-1 rounded hover:bg-accent transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Zur Setliste hinzufügen"
+                  >
+                    <PlusCircle className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-56 p-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1">
+                    Zur Setliste hinzufügen
+                  </p>
+                  <ScrollArea className="max-h-40">
+                    <div className="space-y-0.5">
+                      {userSetlists.map((sl) => (
+                        <button
+                          key={sl.id}
+                          className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent transition-colors flex items-center gap-2"
+                          onClick={() => {
+                            onAddToSetlist(song.id, sl.id);
+                            setSetlistPopoverOpen(false);
+                          }}
+                        >
+                          <ListMusic className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="truncate">{sl.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+            )}
+            <button
+              className="p-1 rounded hover:bg-accent transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavourite(song.id, isFavourite);
+              }}
+              title={isFavourite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}
+            >
+              {isFavourite ? (
+                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+              ) : (
+                <Star className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="flex-shrink-0 text-sm pt-0 relative">
+      <CardContent className="flex-shrink-0 text-sm pt-0 relative space-y-2">
         <div className="flex items-center gap-2 text-muted-foreground">
           <User className="h-4 w-4" />
           <span className="truncate">{song.creatorName || 'Unbekannt'}</span>
+          {missingChords && (
+            <span title="Keine Akkorde">
+              <AlertTriangle className="h-4 w-4 text-amber-500 ml-1" />
+            </span>
+          )}
         </div>
+        {assignedTags.length > 0 && <TagPills tags={assignedTags} />}
       </CardContent>
+      <CardFooter className="pt-0 relative">
+        <TagManager
+          firestore={firestore}
+          userId={userId}
+          songId={song.id}
+          songTagIds={songTagIds}
+          allTags={allTags}
+        />
+      </CardFooter>
     </Card>
   );
 }
+
+type SortOption = 'title-asc' | 'artist-asc' | 'newest' | 'most-played';
 
 function LibraryPage() {
   const { user, loading: userLoading } = useUser();
@@ -170,6 +290,19 @@ function LibraryPage() {
   const [isSessionDialogOpen, setIsSessionDialogOpen] = useState(false);
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
 
+  // Duplicate warning dialog state
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [pendingAddFn, setPendingAddFn] = useState<(() => Promise<void>) | null>(null);
+
+  // --- New filter/sort state ---
+  const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [sortOption, setSortOption] = useState<SortOption>('title-asc');
+  const [groupByArtist, setGroupByArtist] = useState(false);
+  const [showMissingChordsOnly, setShowMissingChordsOnly] = useState(false);
+  // Collapsible open state per artist
+  const [openArtists, setOpenArtists] = useState<Record<string, boolean>>({});
+
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
     [firestore, user]
@@ -187,16 +320,141 @@ function LibraryPage() {
     error,
   } = useCollection<Song>(songsRef);
 
+  // Tags collection
+  const tagsRef = useMemoFirebase(
+    () =>
+      firestore && user
+        ? query(collection(firestore, 'tags'), where('userId', '==', user.uid))
+        : null,
+    [firestore, user]
+  );
+  const { data: allTagsRaw } = useCollection<SongTag>(tagsRef);
+  const allTags = allTagsRaw ?? [];
+
+  // User setlists
+  const userSetlistsRef = useMemoFirebase(
+    () =>
+      firestore && user
+        ? query(
+            collection(firestore, 'setlists'),
+            where('userId', '==', user.uid),
+            orderBy('updatedAt', 'desc')
+          )
+        : null,
+    [firestore, user]
+  );
+  const { data: userSetlistsRaw } = useCollection<Setlist>(userSetlistsRef);
+  const userSetlists = userSetlistsRaw ?? [];
+
+  const handleAddToSetlist = async (songId: string, setlistId: string) => {
+    if (!firestore) return;
+    try {
+      await updateDoc(doc(firestore, 'setlists', setlistId), {
+        songIds: arrayUnion(songId),
+        updatedAt: serverTimestamp(),
+      });
+      const sl = userSetlists.find((s) => s.id === setlistId);
+      toast({
+        title: 'Song hinzugefügt',
+        description: sl ? `Zur Setliste "${sl.title}" hinzugefügt.` : undefined,
+      });
+    } catch (err) {
+      console.error('Add to setlist failed', err);
+      toast({
+        variant: 'destructive',
+        title: 'Fehler',
+        description: 'Song konnte nicht zur Setliste hinzugefügt werden.',
+      });
+    }
+  };
+
+  // Favourites toggle
+  const handleToggleFavourite = async (songId: string, isFav: boolean) => {
+    if (!user || !firestore) return;
+    try {
+      await updateDoc(doc(firestore, 'users', user.uid), {
+        favourites: isFav ? arrayRemove(songId) : arrayUnion(songId),
+      });
+    } catch (err) {
+      console.error('Favourites update failed', err);
+      toast({
+        variant: 'destructive',
+        title: 'Fehler',
+        description: 'Favorit konnte nicht gespeichert werden.',
+      });
+    }
+  };
+
+  const favouriteIds = useMemo(
+    () => new Set(userProfile?.favourites ?? []),
+    [userProfile]
+  );
+
   const filteredSongs = useMemo(() => {
     if (!songs) return [];
-    if (!librarySearchQuery) return songs;
-    const query = librarySearchQuery.toLowerCase();
-    return songs.filter(
-      (song) =>
-        song.title.toLowerCase().includes(query) ||
-        song.artist.toLowerCase().includes(query)
-    );
-  }, [songs, librarySearchQuery]);
+    let result = [...songs];
+
+    // Text search
+    if (librarySearchQuery) {
+      const q = librarySearchQuery.toLowerCase();
+      result = result.filter(
+        (song) =>
+          song.title.toLowerCase().includes(q) ||
+          song.artist.toLowerCase().includes(q)
+      );
+    }
+
+    // Favourites filter
+    if (showFavouritesOnly) {
+      result = result.filter((song) => favouriteIds.has(song.id));
+    }
+
+    // Tag filter
+    if (selectedTagIds.length > 0) {
+      result = result.filter((song) =>
+        selectedTagIds.every((tid) => (song.tags ?? []).includes(tid))
+      );
+    }
+
+    // Missing chords filter
+    if (showMissingChordsOnly) {
+      result = result.filter((song) => isMissingChords(song));
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      switch (sortOption) {
+        case 'title-asc':
+          return a.title.localeCompare(b.title);
+        case 'artist-asc':
+          return a.artist.localeCompare(b.artist);
+        case 'newest':
+          return (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0);
+        case 'most-played':
+          return (b.playCount ?? 0) - (a.playCount ?? 0);
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [songs, librarySearchQuery, showFavouritesOnly, favouriteIds, selectedTagIds, showMissingChordsOnly, sortOption]);
+
+  // Group by artist
+  const artistGroups = useMemo(() => {
+    if (!groupByArtist) return null;
+    const map = new Map<string, Song[]>();
+    for (const song of filteredSongs) {
+      const key = song.artist || 'Unbekannter Künstler';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(song);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [groupByArtist, filteredSongs]);
+
+  const toggleArtist = (artist: string) => {
+    setOpenArtists((prev) => ({ ...prev, [artist]: !prev[artist] }));
+  };
 
   const sessionsRef = useMemoFirebase(
     () => (firestore ? collection(firestore, 'sessions') : null),
@@ -238,7 +496,7 @@ function LibraryPage() {
       } finally {
         setIsSearchingItunes(false);
       }
-    }, 500); // 500ms debounce
+    }, 500);
 
     return () => clearTimeout(debounceTimer);
   }, [itunesSearchQuery, toast]);
@@ -249,7 +507,7 @@ function LibraryPage() {
       artist: song.artistName,
       artworkUrl: song.artworkUrl100?.replace('100x100', '400x400'),
     });
-    setLyrics(''); // Clear previous lyrics
+    setLyrics('');
     setGenerationDialogOpen(true);
     setIsFetchingLyrics(true);
     setItunesSearchQuery('');
@@ -258,9 +516,7 @@ function LibraryPage() {
     const fetchLyrics = async () => {
       try {
         const lyricsResponse = await fetch(
-          `/api/lyrics/${encodeURIComponent(
-            song.artistName
-          )}/${encodeURIComponent(song.trackName)}`
+          `/api/lyrics/${encodeURIComponent(song.artistName)}/${encodeURIComponent(song.trackName)}`
         );
         if (lyricsResponse.ok) {
           const data = await lyricsResponse.json();
@@ -305,35 +561,58 @@ function LibraryPage() {
         key: selectedKey,
       });
 
-      const songsCollectionRef = collection(firestore, 'songs');
-      await addDoc(songsCollectionRef, {
-        userId: user.uid,
-        creatorName: user.displayName || user.email || 'Anonym',
-        title: generationInfo.title,
-        artist: generationInfo.artist,
-        sheet: { ...sheet, key: selectedKey }, // Ensure the selected key is saved
-        createdAt: serverTimestamp(),
-        artworkUrl: generationInfo.artworkUrl || null,
-      });
-
-      if (userProfile?.role === 'creator') {
-        const today = new Date().toISOString().split('T')[0];
-        const newCount =
-          userProfile.lastGenerationDate === today
-            ? (userProfile.songsGeneratedToday || 0) + 1
-            : 1;
-        await updateDoc(userProfileRef, {
-          songsGeneratedToday: newCount,
-          lastGenerationDate: today,
+      const doSave = async () => {
+        const songsCollectionRef = collection(firestore, 'songs');
+        await addDoc(songsCollectionRef, {
+          userId: user.uid,
+          creatorName: user.displayName || user.email || 'Anonym',
+          title: generationInfo.title,
+          artist: generationInfo.artist,
+          sheet: { ...sheet, key: selectedKey },
+          createdAt: serverTimestamp(),
+          artworkUrl: generationInfo.artworkUrl || null,
         });
+
+        if (userProfile?.role === 'creator') {
+          const today = new Date().toISOString().split('T')[0];
+          const newCount =
+            userProfile.lastGenerationDate === today
+              ? (userProfile.songsGeneratedToday || 0) + 1
+              : 1;
+          await updateDoc(userProfileRef, {
+            songsGeneratedToday: newCount,
+            lastGenerationDate: today,
+          });
+        }
+
+        toast({
+          title: 'Song generiert & gespeichert',
+          description: `"${generationInfo.title}" wurde zur Bibliothek hinzugefügt.`,
+        });
+
+        setGenerationDialogOpen(false);
+        setIsGenerating(false);
+        setLyrics('');
+        setGenerationInfo(null);
+      };
+
+      // Check for duplicate
+      const titleLower = generationInfo.title.toLowerCase();
+      const artistLower = generationInfo.artist.toLowerCase();
+      const isDuplicate = (songs ?? []).some(
+        (s) =>
+          s.title.toLowerCase() === titleLower &&
+          s.artist.toLowerCase() === artistLower
+      );
+
+      if (isDuplicate) {
+        setPendingAddFn(() => doSave);
+        setDuplicateDialogOpen(true);
+        setIsGenerating(false);
+        return;
       }
 
-      toast({
-        title: 'Song generiert & gespeichert',
-        description: `"${generationInfo.title}" wurde zur Bibliothek hinzugefügt.`,
-      });
-
-      setGenerationDialogOpen(false);
+      await doSave();
     } catch (error: any) {
       console.error('Generation Error: ', error);
       toast({
@@ -342,7 +621,6 @@ function LibraryPage() {
         description:
           error.message || 'Das Song-Sheet konnte nicht erstellt werden.',
       });
-    } finally {
       setIsGenerating(false);
       setLyrics('');
       setGenerationInfo(null);
@@ -384,36 +662,57 @@ function LibraryPage() {
         key: manualForm.key,
       });
 
-      const songsCollectionRef = collection(firestore, 'songs');
-      await addDoc(songsCollectionRef, {
-        userId: user.uid,
-        creatorName: user.displayName || user.email || 'Anonym',
-        title: manualForm.title,
-        artist: manualForm.artist,
-        sheet: { ...sheet, key: manualForm.key },
-        createdAt: serverTimestamp(),
-        artworkUrl: null, // No artwork for manually added songs
-      });
-
-      if (userProfile?.role === 'creator') {
-        const today = new Date().toISOString().split('T')[0];
-        const newCount =
-          userProfile.lastGenerationDate === today
-            ? (userProfile.songsGeneratedToday || 0) + 1
-            : 1;
-        await updateDoc(userProfileRef, {
-          songsGeneratedToday: newCount,
-          lastGenerationDate: today,
+      const doManualSave = async () => {
+        const songsCollectionRef = collection(firestore, 'songs');
+        await addDoc(songsCollectionRef, {
+          userId: user.uid,
+          creatorName: user.displayName || user.email || 'Anonym',
+          title: manualForm.title,
+          artist: manualForm.artist,
+          sheet: { ...sheet, key: manualForm.key },
+          createdAt: serverTimestamp(),
+          artworkUrl: null,
         });
+
+        if (userProfile?.role === 'creator') {
+          const today = new Date().toISOString().split('T')[0];
+          const newCount =
+            userProfile.lastGenerationDate === today
+              ? (userProfile.songsGeneratedToday || 0) + 1
+              : 1;
+          await updateDoc(userProfileRef, {
+            songsGeneratedToday: newCount,
+            lastGenerationDate: today,
+          });
+        }
+
+        toast({
+          title: 'Song generiert & gespeichert',
+          description: `"${manualForm.title}" wurde zur Bibliothek hinzugefügt.`,
+        });
+
+        setManualAddDialogOpen(false);
+        setManualForm({ title: '', artist: '', lyrics: '', key: 'C' });
+        setIsGenerating(false);
+      };
+
+      // Check for duplicate
+      const titleLower = manualForm.title.toLowerCase();
+      const artistLower = manualForm.artist.toLowerCase();
+      const isDuplicate = (songs ?? []).some(
+        (s) =>
+          s.title.toLowerCase() === titleLower &&
+          s.artist.toLowerCase() === artistLower
+      );
+
+      if (isDuplicate) {
+        setPendingAddFn(() => doManualSave);
+        setDuplicateDialogOpen(true);
+        setIsGenerating(false);
+        return;
       }
 
-      toast({
-        title: 'Song generiert & gespeichert',
-        description: `"${manualForm.title}" wurde zur Bibliothek hinzugefügt.`,
-      });
-
-      setManualAddDialogOpen(false);
-      setManualForm({ title: '', artist: '', lyrics: '', key: 'C' });
+      await doManualSave();
     } catch (error: any) {
       console.error('Manual Generation Error: ', error);
       toast({
@@ -422,7 +721,6 @@ function LibraryPage() {
         description:
           error.message || 'Das Song-Sheet konnte nicht erstellt werden.',
       });
-    } finally {
       setIsGenerating(false);
     }
   };
@@ -493,17 +791,42 @@ function LibraryPage() {
   const canGenerate =
     userProfile?.role === 'creator' || userProfile?.role === 'admin';
 
+  const renderSongGrid = (songList: Song[]) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      {songList.map((song) => (
+        <SongCard
+          key={song.id}
+          song={song}
+          isFavourite={favouriteIds.has(song.id)}
+          onToggleFavourite={handleToggleFavourite}
+          allTags={allTags}
+          firestore={firestore}
+          userId={user.uid}
+          missingChords={isMissingChords(song)}
+          userSetlists={userSetlists}
+          onAddToSetlist={handleAddToSetlist}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background">
-      <header className="p-4 sm:p-6 flex justify-between items-center border-b sticky top-0 bg-background/95 backdrop-blur-sm z-10">
+      <header className="p-4 sm:p-6 flex justify-between items-center border-b sticky top-0 bg-card/60 backdrop-blur-sm z-10">
         <div
           className="flex items-center gap-3 cursor-pointer"
           onClick={() => router.push('/')}
         >
-          <LibraryIcon className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold text-foreground">Songs</h1>
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-sm">
+            <LibraryIcon className="h-5 w-5 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold gradient-text">Songs</h1>
         </div>
         <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => router.push('/setlists')}>
+            <ListMusic className="mr-2 h-4 w-4" />
+            Setlisten
+          </Button>
           {canGenerate &&
             (userSession ? (
               <Button
@@ -517,7 +840,10 @@ function LibraryPage() {
                 onOpenChange={setIsSessionDialogOpen}
               >
                 <DialogTrigger asChild>
-                  <Button disabled={sessionsLoading}>
+                  <Button
+                    disabled={sessionsLoading}
+                    className="bg-gradient-to-r from-primary to-violet-500 hover:from-primary/90 hover:to-violet-500/90"
+                  >
                     {sessionsLoading ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
@@ -594,10 +920,11 @@ function LibraryPage() {
 
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
         {canGenerate && (
-          <Card className="mb-8">
+          <Card className="mb-8 border-border/60 shadow-sm overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-primary to-violet-500" />
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Sparkles />
+                <Sparkles className="text-primary" />
                 Neuen Song hinzufügen
               </CardTitle>
               <CardDescription>
@@ -887,17 +1214,138 @@ function LibraryPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Library Section */}
         <div>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold">Alle Songs</h2>
-            <div className="w-full max-w-sm">
-              <Input
-                placeholder="Bibliothek durchsuchen..."
-                value={librarySearchQuery}
-                onChange={(e) => setLibrarySearchQuery(e.target.value)}
-              />
+          {/* Toolbar */}
+          <div className="mb-6 space-y-4">
+            <div className="flex flex-wrap justify-between items-center gap-3">
+              <h2 className="text-2xl font-bold gradient-text">Alle Songs</h2>
+              <div className="w-full max-w-sm">
+                <Input
+                  placeholder="Bibliothek durchsuchen..."
+                  value={librarySearchQuery}
+                  onChange={(e) => setLibrarySearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Filters & Sort row */}
+            <div className="flex flex-wrap items-center gap-4 py-3 px-4 bg-card/80 rounded-xl border border-border/60 shadow-sm">
+              {/* Sort */}
+              <div className="flex items-center gap-2 min-w-[200px]">
+                <Label htmlFor="sort-select" className="text-sm whitespace-nowrap">
+                  Sortieren:
+                </Label>
+                <Select
+                  value={sortOption}
+                  onValueChange={(v) => setSortOption(v as SortOption)}
+                >
+                  <SelectTrigger id="sort-select" className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="title-asc">A–Z (Titel)</SelectItem>
+                    <SelectItem value="artist-asc">A–Z (Künstler)</SelectItem>
+                    <SelectItem value="newest">Neueste zuerst</SelectItem>
+                    <SelectItem value="most-played">Meist gespielt</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="h-5 w-px bg-border hidden sm:block" />
+
+              {/* Favourites toggle */}
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="fav-filter"
+                  checked={showFavouritesOnly}
+                  onCheckedChange={setShowFavouritesOnly}
+                />
+                <Label htmlFor="fav-filter" className="text-sm flex items-center gap-1 cursor-pointer">
+                  <Star className="h-3.5 w-3.5 text-yellow-400" />
+                  Nur Favoriten
+                </Label>
+              </div>
+
+              <div className="h-5 w-px bg-border hidden sm:block" />
+
+              {/* Missing chords toggle */}
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="chords-filter"
+                  checked={showMissingChordsOnly}
+                  onCheckedChange={setShowMissingChordsOnly}
+                />
+                <Label htmlFor="chords-filter" className="text-sm flex items-center gap-1 cursor-pointer">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                  Nur Songs ohne Akkorde
+                </Label>
+              </div>
+
+              <div className="h-5 w-px bg-border hidden sm:block" />
+
+              {/* Group by artist toggle */}
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="group-artist"
+                  checked={groupByArtist}
+                  onCheckedChange={setGroupByArtist}
+                />
+                <Label htmlFor="group-artist" className="text-sm cursor-pointer whitespace-nowrap">
+                  Nach Künstler gruppieren
+                </Label>
+              </div>
+
+              {/* Tag filter */}
+              {allTags.length > 0 && (
+                <>
+                  <div className="h-5 w-px bg-border hidden sm:block" />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm text-muted-foreground whitespace-nowrap flex items-center gap-1">
+                      <TagIcon className="h-3.5 w-3.5" />
+                      Labels:
+                    </span>
+                    {allTags.map((tag) => {
+                      const isActive = selectedTagIds.includes(tag.id);
+                      return (
+                        <button
+                          key={tag.id}
+                          onClick={() =>
+                            setSelectedTagIds((prev) =>
+                              isActive
+                                ? prev.filter((id) => id !== tag.id)
+                                : [...prev, tag.id]
+                            )
+                          }
+                          className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-white transition-opacity"
+                          style={{
+                            backgroundColor: tag.color,
+                            opacity: isActive ? 1 : 0.45,
+                            outline: isActive ? `2px solid ${tag.color}` : 'none',
+                            outlineOffset: '2px',
+                          }}
+                        >
+                          {tag.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
+
+          {/* Song count */}
+          {!songsLoading && (
+            <p className="text-sm text-muted-foreground mb-4">
+              {filteredSongs.length}{' '}
+              {filteredSongs.length === 1 ? 'Song' : 'Songs'}
+              {(showFavouritesOnly || showMissingChordsOnly || selectedTagIds.length > 0 || librarySearchQuery)
+                ? ' gefunden'
+                : ' gesamt'}
+            </p>
+          )}
+
           {songsLoading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {[...Array(8)].map((_, i) => (
@@ -925,21 +1373,104 @@ function LibraryPage() {
                 Keine Songs gefunden
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {librarySearchQuery
-                  ? 'Deine Suche ergab keine Treffer.'
+                {librarySearchQuery || showFavouritesOnly || showMissingChordsOnly || selectedTagIds.length > 0
+                  ? 'Deine Filter ergaben keine Treffer.'
                   : 'Generiere deinen ersten Song, um zu beginnen.'}
               </p>
             </div>
           )}
-          {!songsLoading && filteredSongs.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredSongs.map((song) => (
-                <SongCard key={song.id} song={song} />
-              ))}
+
+          {/* Grouped by artist */}
+          {!songsLoading && filteredSongs.length > 0 && groupByArtist && artistGroups && (
+            <div className="space-y-4">
+              {artistGroups.map(([artist, artistSongs]) => {
+                const isOpen = openArtists[artist] !== false; // default open
+                return (
+                  <Collapsible
+                    key={artist}
+                    open={isOpen}
+                    onOpenChange={() => toggleArtist(artist)}
+                  >
+                    <CollapsibleTrigger className="flex items-center gap-3 w-full text-left py-2 px-3 rounded-lg hover:bg-accent transition-colors sticky top-[73px] bg-background/95 backdrop-blur-sm z-[5]">
+                      {isOpen ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <span className="font-semibold text-lg">{artist}</span>
+                      <Badge variant="secondary" className="ml-1">
+                        {artistSongs.length}
+                      </Badge>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-2">
+                      {renderSongGrid(artistSongs)}
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
             </div>
+          )}
+
+          {/* Flat list */}
+          {!songsLoading && filteredSongs.length > 0 && !groupByArtist && (
+            renderSongGrid(filteredSongs)
           )}
         </div>
       </main>
+
+      {/* Duplicate warning dialog */}
+      <AlertDialog
+        open={duplicateDialogOpen}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDuplicateDialogOpen(false);
+            setPendingAddFn(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Song bereits vorhanden</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ein Song mit diesem Titel und Künstler existiert bereits.
+              Trotzdem speichern?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setDuplicateDialogOpen(false);
+                setPendingAddFn(null);
+              }}
+            >
+              Abbrechen
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                setDuplicateDialogOpen(false);
+                if (pendingAddFn) {
+                  setIsGenerating(true);
+                  try {
+                    await pendingAddFn();
+                  } catch (err: any) {
+                    console.error('Duplicate save error:', err);
+                    toast({
+                      variant: 'destructive',
+                      title: 'Speichern fehlgeschlagen',
+                      description: err.message || 'Der Song konnte nicht gespeichert werden.',
+                    });
+                  } finally {
+                    setIsGenerating(false);
+                    setPendingAddFn(null);
+                  }
+                }
+              }}
+            >
+              Trotzdem speichern
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
