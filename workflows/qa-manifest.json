@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "created": "2026-04-09T00:00:00Z",
+  "updated": "2026-04-10T00:00:00Z",
+  "base_url": "https://aldene.de",
+  "screens": [
+    {
+      "url": "/",
+      "name": "Home",
+      "auth_required": false,
+      "source_file": "src/app/page.tsx",
+      "discovered_from": ["codebase"],
+      "workflow_refs": [],
+      "params": {},
+      "example_url": "/",
+      "notes": "Shows session list and song picker. Content differs for logged-in vs anonymous users."
+    },
+    {
+      "url": "/auth",
+      "name": "Auth / Login",
+      "auth_required": false,
+      "source_file": "src/app/auth/page.tsx",
+      "discovered_from": ["codebase"],
+      "workflow_refs": [],
+      "params": {},
+      "example_url": "/auth",
+      "notes": "Login/signup page."
+    },
+    {
+      "url": "/library",
+      "name": "Song Library",
+      "auth_required": false,
+      "source_file": "src/app/library/page.tsx",
+      "discovered_from": ["codebase"],
+      "workflow_refs": [],
+      "params": {},
+      "example_url": "/library",
+      "notes": "Creator/admin can add songs via iTunes search. Auth required for full access."
+    },
+    {
+      "url": "/library/[songId]",
+      "name": "Song Detail",
+      "auth_required": false,
+      "source_file": "src/app/library/[songId]/page.tsx",
+      "discovered_from": ["codebase"],
+      "workflow_refs": [],
+      "params": { "songId": "07fXu9XsHAShCkmjeD4S" },
+      "example_url": "/library/07fXu9XsHAShCkmjeD4S",
+      "notes": "Shows song sheet with chords/lyrics. Text/image toggle if page images are available."
+    },
+    {
+      "url": "/session/[sessionId]",
+      "name": "Live Session",
+      "auth_required": false,
+      "source_file": "src/app/session/[sessionId]/page.tsx",
+      "discovered_from": ["codebase"],
+      "workflow_refs": [],
+      "params": { "sessionId": "ejKMFFWeYVYpOvSKTwIvdkjgKcQ2" },
+      "example_url": "/session/ejKMFFWeYVYpOvSKTwIvdkjgKcQ2",
+      "notes": "Collaborative session viewer. Host features require auth. Session may not exist — smoke tester should handle 404 gracefully."
+    },
+    {
+      "url": "/setlists",
+      "name": "Setlists",
+      "auth_required": true,
+      "source_file": "src/app/setlists/page.tsx",
+      "discovered_from": ["codebase"],
+      "workflow_refs": [],
+      "params": {},
+      "example_url": "/setlists",
+      "notes": "NEW: List of user setlists. Requires auth. Non-auth users should be redirected or see access-denied."
+    },
+    {
+      "url": "/setlists/[setlistId]",
+      "name": "Setlist Detail",
+      "auth_required": true,
+      "source_file": "src/app/setlists/[setlistId]/page.tsx",
+      "discovered_from": ["codebase"],
+      "workflow_refs": [],
+      "params": { "setlistId": "discover-from-setlists-page" },
+      "example_url": "/setlists",
+      "notes": "NEW: Edit/view a specific setlist. Smoke tester should navigate to /setlists first and click into one."
+    },
+    {
+      "url": "/s/[setlistId]",
+      "name": "Public Setlist View",
+      "auth_required": false,
+      "source_file": "src/app/s/[setlistId]/page.tsx",
+      "discovered_from": ["codebase"],
+      "workflow_refs": [],
+      "params": { "setlistId": "discover-from-setlists-page" },
+      "example_url": "/setlists",
+      "notes": "NEW: Public read-only setlist view. Only visible if setlist.isPublic=true. Smoke tester should find a public share link on the setlists detail page."
+    },
+    {
+      "url": "/admin",
+      "name": "Admin Panel",
+      "auth_required": true,
+      "source_file": "src/app/admin/page.tsx",
+      "discovered_from": ["codebase"],
+      "workflow_refs": [],
+      "params": {},
+      "example_url": "/admin",
+      "notes": "User role management. Redirects non-admins immediately."
+    }
+  ]
+}
